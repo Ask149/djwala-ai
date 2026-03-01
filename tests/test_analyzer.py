@@ -106,19 +106,28 @@ class TestMixPoints:
 
 class TestEstimate:
     def test_estimate_returns_valid_analysis(self, analyzer, sample_track):
-        """Test that estimate() returns a valid TrackAnalysis with reasonable defaults."""
+        """Test that estimate() returns a valid TrackAnalysis with reasonable values."""
         result = analyzer.estimate(sample_track)
         
         assert result.video_id == sample_track.video_id
         assert result.title == sample_track.title
         assert result.duration == sample_track.duration
-        assert result.bpm == 120.0  # Center of Bollywood/pop range
-        assert result.key == "Am"
-        assert result.camelot == "8A"
+        
+        # BPM should be in reasonable DJ range (not fixed 120.0)
+        assert 78 <= result.bpm <= 145, f"BPM should be in DJ range, got {result.bpm}"
+        
+        # Key should be valid format
+        assert result.key in ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+                              "Am", "Cm", "Dm", "Em", "Gm"], f"Invalid key: {result.key}"
+        assert result.camelot.endswith(("A", "B")), f"Invalid camelot: {result.camelot}"
+        
+        # Mix points should be reasonable
         assert result.mix_in_point == 0.0
         assert result.mix_out_point == sample_track.duration - 16.0
+        
+        # Energy curve should exist and be shaped (not flat)
         assert len(result.energy_curve) == int(sample_track.duration)
-        assert all(v == 0.5 for v in result.energy_curve)  # Flat energy
+        assert all(0.0 <= v <= 1.0 for v in result.energy_curve), "Energy values should be 0-1"
 
     def test_estimate_handles_missing_duration(self, analyzer):
         """Test that estimate() handles tracks with no duration set."""
@@ -127,3 +136,90 @@ class TestEstimate:
         
         assert result.duration == 240.0  # Default fallback
         assert result.mix_out_point == 224.0  # 240 - 16
+        assert len(result.energy_curve) == 240  # Should match duration
+        assert all(0.0 <= v <= 1.0 for v in result.energy_curve)
+
+
+class TestGenreAwareEstimation:
+    """Test that estimate() returns varied values based on genre/artist hints."""
+
+    def test_romantic_genre_gets_slower_bpm(self, analyzer):
+        """Romantic songs should get BPM in 78-95 range."""
+        track = TrackInfo(video_id="abc123", title="Tum Hi Ho - Romantic Song", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 78 <= result.bpm <= 95, f"Romantic BPM should be 78-95, got {result.bpm}"
+
+    def test_party_genre_gets_faster_bpm(self, analyzer):
+        """Party songs should get BPM in 125-145 range."""
+        track = TrackInfo(video_id="def456", title="Badtameez Dil - Party Song", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 125 <= result.bpm <= 145, f"Party BPM should be 125-145, got {result.bpm}"
+
+    def test_dance_genre_gets_medium_fast_bpm(self, analyzer):
+        """Dance songs should get BPM in 120-140 range."""
+        track = TrackInfo(video_id="ghi789", title="Kar Gayi Chull - Dance Mix", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 120 <= result.bpm <= 140, f"Dance BPM should be 120-140, got {result.bpm}"
+
+    def test_no_genre_gets_default_range(self, analyzer):
+        """Songs with no genre keywords should get BPM in 95-130 range (Bollywood default)."""
+        track = TrackInfo(video_id="jkl012", title="Some Random Song Title", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 95 <= result.bpm <= 130, f"Default BPM should be 95-130, got {result.bpm}"
+
+    def test_arijit_singh_gets_slower_range(self, analyzer):
+        """Arijit Singh songs should narrow to 80-110 BPM."""
+        track = TrackInfo(video_id="arijit123", title="Tum Hi Ho - Arijit Singh", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 80 <= result.bpm <= 110, f"Arijit Singh BPM should be 80-110, got {result.bpm}"
+
+    def test_ap_dhillon_gets_punjabi_range(self, analyzer):
+        """AP Dhillon songs should narrow to 90-115 BPM."""
+        track = TrackInfo(video_id="ap123", title="Brown Munde - AP Dhillon", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 90 <= result.bpm <= 115, f"AP Dhillon BPM should be 90-115, got {result.bpm}"
+
+    def test_badshah_gets_hip_hop_range(self, analyzer):
+        """Badshah songs should narrow to 85-110 BPM."""
+        track = TrackInfo(video_id="badshah123", title="Genda Phool - Badshah", duration=240.0)
+        result = analyzer.estimate(track)
+        assert 85 <= result.bpm <= 110, f"Badshah BPM should be 85-110, got {result.bpm}"
+
+    def test_keys_vary_across_tracks(self, analyzer):
+        """Different tracks should get different keys (not all Am)."""
+        tracks = [
+            TrackInfo(video_id=f"key{i}", title="Test Song", duration=240.0)
+            for i in range(10)
+        ]
+        results = [analyzer.estimate(t) for t in tracks]
+        keys = [r.key for r in results]
+        assert len(set(keys)) >= 2, f"Expected key variation, got: {keys}"
+
+    def test_same_track_gets_same_key(self, analyzer):
+        """Same video_id should always return same key (deterministic)."""
+        track = TrackInfo(video_id="consistent", title="Test", duration=240.0)
+        result1 = analyzer.estimate(track)
+        result2 = analyzer.estimate(track)
+        assert result1.key == result2.key
+        assert result1.camelot == result2.camelot
+
+    def test_romantic_gets_low_energy_curve(self, analyzer):
+        """Romantic songs should have lower energy values."""
+        track = TrackInfo(video_id="rom1", title="Romantic Ballad", duration=240.0)
+        result = analyzer.estimate(track)
+        avg_energy = sum(result.energy_curve) / len(result.energy_curve)
+        assert avg_energy < 0.5, f"Romantic avg energy should be < 0.5, got {avg_energy}"
+
+    def test_party_gets_high_energy_curve(self, analyzer):
+        """Party songs should have higher energy values."""
+        track = TrackInfo(video_id="party1", title="Party Anthem", duration=240.0)
+        result = analyzer.estimate(track)
+        avg_energy = sum(result.energy_curve) / len(result.energy_curve)
+        assert avg_energy > 0.5, f"Party avg energy should be > 0.5, got {avg_energy}"
+
+    def test_energy_curves_not_flat(self, analyzer):
+        """Energy curves should have some variation (not all identical values)."""
+        track = TrackInfo(video_id="vary1", title="Test Song", duration=240.0)
+        result = analyzer.estimate(track)
+        unique_values = len(set(result.energy_curve))
+        assert unique_values > 1, "Energy curve should vary, not be completely flat"

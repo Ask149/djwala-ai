@@ -53,21 +53,137 @@ class AudioAnalyzer:
         """Return estimated DJ parameters when audio download is unavailable.
         
         Used as fallback when YouTube blocks downloads (e.g., from datacenter IPs).
-        Returns conservative estimates that allow the DJ brain to still order tracks
-        and plan crossfades, though transitions will be less optimal than with real analysis.
+        Returns genre-aware estimates based on title keywords and artist names,
+        with deterministic variation so the DJ brain can still order tracks
+        intelligently and plan reasonable crossfades.
         """
+        import hashlib
+        
         duration = track.duration or 240.0
+        
+        # Step 1: Detect genre from title → get BPM range and energy level
+        min_bpm, max_bpm, energy_level = self._detect_genre_from_title(track.title)
+        
+        # Step 2: Narrow by artist if detected
+        min_bpm, max_bpm = self._narrow_by_artist(track.title, min_bpm, max_bpm)
+        
+        # Step 3: Use hash of video_id as deterministic seed
+        hash_int = int(hashlib.md5(track.video_id.encode()).hexdigest(), 16)
+        bpm_range = max_bpm - min_bpm
+        bpm = min_bpm + (hash_int % (bpm_range + 1))
+        bpm = float(bpm)
+        
+        # Step 4: Pick key deterministically
+        key, camelot = self._pick_key_deterministic(track.video_id)
+        
+        # Step 5: Generate shaped energy curve
+        energy_curve = self._generate_energy_curve(int(duration), energy_level, track.video_id)
+        
         return TrackAnalysis(
             video_id=track.video_id,
             title=track.title,
             duration=duration,
-            bpm=120.0,                    # Center of Bollywood/pop range (~90-150 BPM)
-            key="Am",                     # Arbitrary minor key
-            camelot="8A",                 # Corresponds to A minor
-            energy_curve=[0.5] * int(duration),  # Flat normalized energy
-            mix_in_point=0.0,             # Start from beginning
-            mix_out_point=max(0.0, duration - 16.0),  # Standard 16s fadeout window
+            bpm=bpm,
+            key=key,
+            camelot=camelot,
+            energy_curve=energy_curve,
+            mix_in_point=0.0,
+            mix_out_point=max(0.0, duration - 16.0),
         )
+
+    def _detect_genre_from_title(self, title: str) -> tuple[int, int, str]:
+        """Detect genre from title keywords and return (min_bpm, max_bpm, energy_level).
+        
+        Returns BPM range and energy level based on genre keywords found in title.
+        Energy levels: "low" (0.25-0.4), "medium" (0.4-0.6), "high" (0.6-0.8)
+        """
+        title_lower = title.lower()
+        genre_patterns = [
+            (["romantic", "ballad", "sad", "unplugged", "acoustic", "lofi"], (78, 95, "low")),
+            (["party", "club", "edm", "remix", "bass boosted", "workout"], (125, 145, "high")),
+            (["dance", "bhangra", "garba", "dandiya", "folk"], (120, 140, "high")),
+            (["hip hop", "rap", "trap", "drill"], (85, 110, "medium")),
+            (["punjabi", "bhangra", "desi"], (95, 120, "medium")),
+        ]
+        for keywords, (min_bpm, max_bpm, energy) in genre_patterns:
+            if any(keyword in title_lower for keyword in keywords):
+                return (min_bpm, max_bpm, energy)
+        return (95, 130, "medium")
+
+    def _narrow_by_artist(self, title: str, min_bpm: int, max_bpm: int) -> tuple[int, int]:
+        """Narrow BPM range based on known artist names in title."""
+        title_lower = title.lower()
+        artist_patterns = [
+            (["arijit singh", "arijit"], (80, 110)),
+            (["ap dhillon"], (90, 115)),
+            (["badshah"], (85, 110)),
+            (["yo yo honey singh", "honey singh"], (95, 125)),
+            (["guru randhawa"], (95, 120)),
+            (["neha kakkar"], (100, 130)),
+            (["atif aslam"], (85, 110)),
+            (["shreya ghoshal"], (85, 115)),
+            (["jubin nautiyal"], (80, 110)),
+            (["pritam"], (95, 130)),
+        ]
+        for keywords, bpm_range in artist_patterns:
+            if any(keyword in title_lower for keyword in keywords):
+                return bpm_range
+        return (min_bpm, max_bpm)
+
+    def _pick_key_deterministic(self, video_id: str) -> tuple[str, str]:
+        """Pick a musical key deterministically based on video_id hash."""
+        import hashlib
+        key_pool = [
+            ("Am", "8A", 25),
+            ("Dm", "7A", 20),
+            ("Em", "9A", 15),
+            ("Cm", "5A", 15),
+            ("Gm", "6A", 10),
+            ("C", "8B", 8),
+            ("D", "10B", 7),
+        ]
+        hash_int = int(hashlib.md5(video_id.encode()).hexdigest(), 16)
+        total_weight = sum(weight for _, _, weight in key_pool)
+        pick = hash_int % total_weight
+        cumulative = 0
+        for key_name, camelot, weight in key_pool:
+            cumulative += weight
+            if pick < cumulative:
+                return (key_name, camelot)
+        return ("Am", "8A")
+
+    def _generate_energy_curve(self, duration: int, energy_level: str, video_id: str) -> list[float]:
+        """Generate a shaped energy curve based on energy level.
+        
+        Creates a curved profile instead of flat line:
+        - "low": gentle arc peaking at 0.35 (romantic/ballad)
+        - "medium": moderate arc peaking at 0.5 (pop/hip-hop)
+        - "high": pronounced arc peaking at 0.7 (party/dance)
+        
+        Uses a base + arc approach so edges don't collapse to zero.
+        """
+        import hashlib
+        import math
+        
+        # (base, arc_amplitude) — energy = base + arc * sin(...)
+        # "low" averages ~0.25, "medium" ~0.42, "high" ~0.58
+        energy_params = {
+            "low": (0.15, 0.20),
+            "medium": (0.30, 0.20),
+            "high": (0.40, 0.30),
+        }
+        base, amp = energy_params.get(energy_level, (0.30, 0.20))
+        
+        curve = []
+        for i in range(duration):
+            position = i / max(1, duration - 1)
+            arc_value = math.sin(position * math.pi)
+            energy = base + arc_value * amp
+            hash_int = int(hashlib.md5(f"{video_id}{i}".encode()).hexdigest(), 16)
+            variation = (hash_int % 11 - 5) / 100.0
+            energy = max(0.1, min(1.0, energy + variation))
+            curve.append(round(energy, 3))
+        return curve
 
     def _download_audio(self, video_id: str) -> str:
         """Download audio from YouTube video, return path to audio file."""

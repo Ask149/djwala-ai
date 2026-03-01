@@ -117,6 +117,9 @@ class DjwalaApp {
         this.ws.onopen = () => {
             this._wsRetries = 0;
             console.log('[DjwalaAI] WebSocket connected');
+            // Request mix command once connected (fixes race condition where
+            // requestMixCommand() was called before WebSocket was OPEN)
+            this.requestMixCommand();
         };
 
         this.ws.onmessage = (event) => {

@@ -98,8 +98,9 @@ class SessionManager:
                         )
                         self._cache.store(analysis)
                     except Exception:
-                        logger.exception("Analysis failed for %s (%s)", track.video_id, track.title)
-                        continue  # skip tracks that fail analysis
+                        logger.warning("Analysis failed for %s (%s), using estimates", track.video_id, track.title)
+                        analysis = self._analyzer.estimate(track)
+                        # Don't cache estimates — real analysis may work later
                 analyzed.append(analysis)
 
             if not analyzed:
@@ -154,8 +155,8 @@ class SessionManager:
                     )
                     self._cache.store(analysis)
                 except Exception:
-                    logger.exception("Background analysis failed for %s", track.video_id)
-                    continue
+                    logger.warning("Background analysis failed for %s, using estimates", track.video_id)
+                    analysis = self._analyzer.estimate(track)
             # Freeze played + currently-playing tracks; only reorder future portion
             played = session.queue[:session.current_index + 1]
             future = session.queue[session.current_index + 1:] + [analysis]

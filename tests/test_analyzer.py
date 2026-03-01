@@ -3,11 +3,22 @@
 import numpy as np
 import pytest
 from djwala.analyzer import AudioAnalyzer
+from djwala.models import TrackInfo
 
 
 @pytest.fixture
 def analyzer():
     return AudioAnalyzer()
+
+
+@pytest.fixture
+def sample_track():
+    return TrackInfo(
+        video_id="test_video_123",
+        title="Test Song",
+        duration=240.0,
+        channel="Test Channel"
+    )
 
 
 class TestBPMDetection:
@@ -91,3 +102,28 @@ class TestMixPoints:
         energy_curve = [0.01, 0.02, 0.1, 0.5, 0.6]  # quiet start
         mix_in = analyzer._find_mix_in(energy_curve)
         assert mix_in >= 2  # should skip the silence
+
+
+class TestEstimate:
+    def test_estimate_returns_valid_analysis(self, analyzer, sample_track):
+        """Test that estimate() returns a valid TrackAnalysis with reasonable defaults."""
+        result = analyzer.estimate(sample_track)
+        
+        assert result.video_id == sample_track.video_id
+        assert result.title == sample_track.title
+        assert result.duration == sample_track.duration
+        assert result.bpm == 120.0  # Center of Bollywood/pop range
+        assert result.key == "Am"
+        assert result.camelot == "8A"
+        assert result.mix_in_point == 0.0
+        assert result.mix_out_point == sample_track.duration - 16.0
+        assert len(result.energy_curve) == int(sample_track.duration)
+        assert all(v == 0.5 for v in result.energy_curve)  # Flat energy
+
+    def test_estimate_handles_missing_duration(self, analyzer):
+        """Test that estimate() handles tracks with no duration set."""
+        track = TrackInfo(video_id="test", title="Test", duration=0.0)
+        result = analyzer.estimate(track)
+        
+        assert result.duration == 240.0  # Default fallback
+        assert result.mix_out_point == 224.0  # 240 - 16

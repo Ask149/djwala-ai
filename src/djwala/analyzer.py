@@ -49,6 +49,26 @@ class AudioAnalyzer:
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 
+    def estimate(self, track: TrackInfo) -> TrackAnalysis:
+        """Return estimated DJ parameters when audio download is unavailable.
+        
+        Used as fallback when YouTube blocks downloads (e.g., from datacenter IPs).
+        Returns conservative estimates that allow the DJ brain to still order tracks
+        and plan crossfades, though transitions will be less optimal than with real analysis.
+        """
+        duration = track.duration or 240.0
+        return TrackAnalysis(
+            video_id=track.video_id,
+            title=track.title,
+            duration=duration,
+            bpm=120.0,                    # Center of Bollywood/pop range (~90-150 BPM)
+            key="Am",                     # Arbitrary minor key
+            camelot="8A",                 # Corresponds to A minor
+            energy_curve=[0.5] * int(duration),  # Flat normalized energy
+            mix_in_point=0.0,             # Start from beginning
+            mix_out_point=max(0.0, duration - 16.0),  # Standard 16s fadeout window
+        )
+
     def _download_audio(self, video_id: str) -> str:
         """Download audio from YouTube video, return path to audio file."""
         import yt_dlp
@@ -59,13 +79,6 @@ class AudioAnalyzer:
             "outtmpl": output_path,
             "quiet": True,
             "no_warnings": True,
-            # Anti-bot measures
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["ios", "web"],
-                    "player_skip": ["webpage", "configs"],
-                }
-            },
             # Spoof user agent to appear as mobile browser
             "http_headers": {
                 "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",

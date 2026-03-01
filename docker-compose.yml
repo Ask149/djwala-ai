@@ -1,0 +1,17 @@
+services:
+  djwala:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist database
+      - djwala-data:/data
+    restart: unless-stopped
+    environment:
+      # Override database path to use persistent volume
+      DJWALA_DATABASE_PATH: /data/djwala_cache.db
+
+volumes:
+  djwala-data:

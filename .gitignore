@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+*.db
+*.sqlite
+.env
+dist/
+*.egg-info/
+tmp_audio/
+
+# YouTube cookies (NEVER commit these!)
+youtube-cookies.txt
+*cookies.txt
+cookies/

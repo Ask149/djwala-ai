@@ -23,6 +23,7 @@ class DjwalaApp {
             statusText: document.querySelector('.status-text'),
             queueSection: document.querySelector('.queue'),
             queueList: document.querySelector('.queue-list'),
+            artistChips: document.querySelector('.artist-chips'),
         };
 
         this.mode = 'artists';
@@ -37,9 +38,26 @@ class DjwalaApp {
         });
     }
 
+    parseArtists(query) {
+        return query.split(',').map(a => a.trim()).filter(a => a.length > 0);
+    }
+
+    showArtistChips(artists) {
+        this.els.artistChips.innerHTML = '';
+        artists.forEach(artist => {
+            const chip = document.createElement('span');
+            chip.className = 'artist-chip';
+            chip.textContent = artist;
+            this.els.artistChips.appendChild(chip);
+        });
+    }
+
     async startSession() {
         const query = this.els.searchInput.value.trim();
         if (!query) return;
+
+        const artists = this.parseArtists(query);
+        this.showArtistChips(artists);
 
         this.els.goBtn.disabled = true;
         this.setStatus('Searching YouTube...', true);

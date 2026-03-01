@@ -172,3 +172,44 @@ class TestBollywoodQueries:
         deadmau5_queries = [q for q in queries if "deadmau5" in q.lower()]
         assert len(arijit_queries) >= 1
         assert len(deadmau5_queries) >= 1
+
+
+class TestMultiArtistDistribution:
+    """Test that multi-artist queries distribute results fairly."""
+
+    def test_build_queries_single_artist(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.ARTISTS, "Arijit Singh")
+        # Should have suffix variants for one artist
+        assert len(queries) >= 3
+        assert all("arijit singh" in q.lower() for q in queries)
+
+    def test_build_queries_three_artists(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.ARTISTS, "Arijit Singh, Pritam, AP Dhillon")
+        # Should have queries for all three artists
+        arijit = [q for q in queries if "arijit" in q.lower()]
+        pritam = [q for q in queries if "pritam" in q.lower()]
+        ap = [q for q in queries if "ap dhillon" in q.lower()]
+        assert len(arijit) >= 1
+        assert len(pritam) >= 1
+        assert len(ap) >= 1
+
+    def test_build_queries_whitespace_handling(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.ARTISTS, "  Arijit Singh ,, , Pritam  ")
+        # Should handle extra whitespace and empty entries
+        assert any("arijit" in q.lower() for q in queries)
+        assert any("pritam" in q.lower() for q in queries)
+        # Should NOT have empty artist queries
+        assert all(len(q.strip()) > 0 for q in queries)
+
+    def test_build_queries_empty_input(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.ARTISTS, "")
+        assert queries == []
+
+    def test_build_queries_only_commas(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.ARTISTS, ",,,")
+        assert queries == []

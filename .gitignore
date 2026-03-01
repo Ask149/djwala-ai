@@ -12,3 +12,7 @@ tmp_audio/
 youtube-cookies.txt
 *cookies.txt
 cookies/
+
+# Screenshots from browser testing
+*.png
+*.jpeg

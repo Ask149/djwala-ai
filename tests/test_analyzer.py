@@ -121,9 +121,10 @@ class TestEstimate:
                               "Am", "Cm", "Dm", "Em", "Gm"], f"Invalid key: {result.key}"
         assert result.camelot.endswith(("A", "B")), f"Invalid camelot: {result.camelot}"
         
-        # Mix points should be reasonable
-        assert result.mix_in_point == 0.0
-        assert result.mix_out_point == sample_track.duration - 16.0
+        # Mix points should be reasonable (smart mix points skip intros/outros)
+        assert result.mix_in_point > 0.0, "Should skip intro"
+        assert result.mix_out_point < sample_track.duration - 16.0, "Should fade out earlier"
+        assert result.mix_out_point - result.mix_in_point >= 60.0, "Should have at least 60s play time"
         
         # Energy curve should exist and be shaped (not flat)
         assert len(result.energy_curve) == int(sample_track.duration)
@@ -135,7 +136,9 @@ class TestEstimate:
         result = analyzer.estimate(track)
         
         assert result.duration == 240.0  # Default fallback
-        assert result.mix_out_point == 224.0  # 240 - 16
+        # Smart mix points: should skip intro and fade out earlier
+        assert result.mix_in_point > 0.0
+        assert result.mix_out_point < 240.0 - 16.0
         assert len(result.energy_curve) == 240  # Should match duration
         assert all(0.0 <= v <= 1.0 for v in result.energy_curve)
 
@@ -223,3 +226,43 @@ class TestGenreAwareEstimation:
         result = analyzer.estimate(track)
         unique_values = len(set(result.energy_curve))
         assert unique_values > 1, "Energy curve should vary, not be completely flat"
+
+    def test_mix_in_point_nonzero_for_estimated_tracks(self, analyzer):
+        """Estimated tracks should skip intro (mix_in_point > 0)."""
+        track = TrackInfo(video_id="mix1", title="Test Song", duration=240.0)
+        result = analyzer.estimate(track)
+        assert result.mix_in_point > 0, "Estimated tracks should skip intro"
+
+    def test_mix_in_varies_by_energy(self, analyzer):
+        """Low-energy tracks should skip more intro than high-energy."""
+        romantic = TrackInfo(video_id="r1", title="Romantic Ballad", duration=240.0)
+        party = TrackInfo(video_id="p1", title="Party Anthem", duration=240.0)
+        r = analyzer.estimate(romantic)
+        p = analyzer.estimate(party)
+        assert r.mix_in_point > p.mix_in_point, "Romantic should skip more intro than party"
+
+    def test_mix_out_point_earlier_than_default(self, analyzer):
+        """Mix out should happen before the last 16 seconds."""
+        track = TrackInfo(video_id="mo1", title="Dance Hit", duration=300.0)
+        result = analyzer.estimate(track)
+        default_out = 300.0 - 16.0
+        assert result.mix_out_point < default_out, "Should fade out earlier than default"
+
+    def test_mix_points_ensure_minimum_play_time(self, analyzer):
+        """Should guarantee at least 60s of play between mix_in and mix_out."""
+        track = TrackInfo(video_id="short1", title="Short Song", duration=120.0)
+        result = analyzer.estimate(track)
+        play_time = result.mix_out_point - result.mix_in_point
+        assert play_time >= 60.0, f"Play time should be >= 60s, got {play_time}"
+
+    def test_mix_in_clamped_for_short_songs(self, analyzer):
+        """For short songs, mix_in should not exceed 25 seconds."""
+        track = TrackInfo(video_id="s1", title="Quick Song", duration=90.0)
+        result = analyzer.estimate(track)
+        assert result.mix_in_point <= 25.0, f"mix_in should be <= 25s, got {result.mix_in_point}"
+
+    def test_mix_in_at_least_8_seconds(self, analyzer):
+        """mix_in should be at least 8 seconds to skip label logos."""
+        track = TrackInfo(video_id="lbl1", title="Normal Song", duration=300.0)
+        result = analyzer.estimate(track)
+        assert result.mix_in_point >= 8.0, f"mix_in should be >= 8s, got {result.mix_in_point}"

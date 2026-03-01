@@ -79,6 +79,30 @@ class AudioAnalyzer:
         # Step 5: Generate shaped energy curve
         energy_curve = self._generate_energy_curve(int(duration), energy_level, track.video_id)
         
+        # Step 6: Calculate smart mix points based on energy level
+        # Bollywood structure: intro 0-15%, verse 15-30%, hook 30-50%, verse 50-70%, outro 75-100%
+        # Higher energy → less intro skip (drops hit faster), more playtime
+        mix_point_config = {
+            "high":   (0.08, 0.85),   # Party/dance: quick intro, play longer
+            "medium": (0.10, 0.82),   # Default: moderate skip
+            "low":    (0.12, 0.78),   # Romantic: longer intro, earlier fadeout
+        }
+        in_pct, out_pct = mix_point_config.get(energy_level, (0.10, 0.82))
+        
+        mix_in = duration * in_pct
+        mix_out = duration * out_pct
+        
+        # Clamp mix_in: at least 8s (skip label logos), at most 25s
+        mix_in = max(8.0, min(25.0, mix_in))
+        
+        # Ensure at least 60s of play time; if not, fall back to relaxed values
+        if mix_out - mix_in < 60.0:
+            mix_in = 8.0
+            mix_out = max(mix_in + 60.0, duration - 10.0)
+        
+        mix_in_point = round(mix_in, 1)
+        mix_out_point = round(mix_out, 1)
+        
         return TrackAnalysis(
             video_id=track.video_id,
             title=track.title,
@@ -87,8 +111,8 @@ class AudioAnalyzer:
             key=key,
             camelot=camelot,
             energy_curve=energy_curve,
-            mix_in_point=0.0,
-            mix_out_point=max(0.0, duration - 16.0),
+            mix_in_point=mix_in_point,
+            mix_out_point=mix_out_point,
         )
 
     def _detect_genre_from_title(self, title: str) -> tuple[int, int, str]:

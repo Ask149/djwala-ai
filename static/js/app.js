@@ -9,6 +9,7 @@ class DjwalaApp {
         this.currentIndex = 0;
         this.mixCommand = null;
         this.positionTimer = null;
+        this.playerState = 'hidden';
 
         this.engine = new MixEngine(() => this.onTrackEnded());
 
@@ -28,6 +29,16 @@ class DjwalaApp {
             apiKeyInput: document.getElementById('apiKeyInput'),
             keyStatus: document.getElementById('keyStatus'),
             mixLengthSlider: document.getElementById('mixLengthSlider'),
+            playerBar: document.getElementById('playerBar'),
+            playerThumb: document.getElementById('playerThumb'),
+            playerTitle: document.getElementById('playerTitle'),
+            playerMeta: document.getElementById('playerMeta'),
+            playBtn: document.getElementById('playBtn'),
+            nextBtn: document.getElementById('nextBtn'),
+            playerElapsed: document.getElementById('playerElapsed'),
+            playerRemaining: document.getElementById('playerRemaining'),
+            progressFill: document.getElementById('playerProgressFill'),
+            crossfadeZone: document.getElementById('playerCrossfadeZone'),
         };
 
         this.mode = 'artists';
@@ -47,6 +58,8 @@ class DjwalaApp {
             this.mixLength = parseInt(e.target.value, 10);
             localStorage.setItem('djwala_mix_length', String(this.mixLength));
         });
+        this.els.playBtn.addEventListener('click', () => this.onPlayTap());
+        this.els.nextBtn.addEventListener('click', () => this.onSkipTap());
     }
 
     parseArtists(query) {
@@ -135,6 +148,24 @@ class DjwalaApp {
         poll();
     }
 
+    async refreshQueue() {
+        try {
+            const resp = await fetch(`/session/${this.sessionId}/queue`);
+            const data = await resp.json();
+            if (data.tracks && data.tracks.length > 0) {
+                this.queue = data.tracks;
+                this.currentIndex = data.current_index;
+            }
+        } catch {
+            // Silently ignore — worst case is stale UI
+        }
+        this.updateNowPlaying();
+        this.updateQueue();
+        if (this.playerState === 'playing') {
+            this.updatePlayerInfo();
+        }
+    }
+
     connectWebSocket() {
         if (this.ws) {
             this.ws.onclose = null; // prevent reconnect from old socket
@@ -188,9 +219,7 @@ class DjwalaApp {
         if (data.action === 'fade_to_next') {
             this.mixCommand = data;
         } else if (data.action === 'advanced') {
-            this.currentIndex++;
-            this.updateNowPlaying();
-            this.updateQueue();
+            this.refreshQueue();
         } else if (data.action === 'no_more_tracks') {
             this.setStatus('No more tracks -- set complete!');
         }
@@ -199,17 +228,90 @@ class DjwalaApp {
     startPlaying() {
         this.hideStatus();
         this.els.goBtn.disabled = false;
-
-        const track = this.queue[0];
-        this.engine.playOnDeck(track.video_id, track.mix_in_point);
         this.updateNowPlaying();
         this.updateQueue();
+        this.showPlayerBar('ready');
+    }
 
-        // Request first mix command
-        this.requestMixCommand();
+    showPlayerBar(state) {
+        this.playerState = state;
+        const bar = this.els.playerBar;
+        const playBtn = this.els.playBtn;
 
-        // Start position monitoring
-        this.startPositionMonitor();
+        if (state === 'hidden') {
+            bar.classList.remove('active', 'ready');
+            return;
+        }
+
+        bar.classList.add('active');
+        bar.classList.toggle('ready', state === 'ready');
+
+        if (state === 'ready') {
+            playBtn.textContent = '▶';
+            this.els.playerTitle.textContent = 'Tap play to start';
+            this.els.playerMeta.textContent = '';
+            // Show thumbnail of first track
+            const track = this.queue[this.currentIndex];
+            if (track) {
+                this.els.playerThumb.src = `https://img.youtube.com/vi/${track.video_id}/mqdefault.jpg`;
+            }
+        } else if (state === 'playing') {
+            playBtn.textContent = '⏸';
+            this.updatePlayerInfo();
+        } else if (state === 'paused') {
+            playBtn.textContent = '▶';
+        }
+    }
+
+    updatePlayerInfo() {
+        const track = this.queue[this.currentIndex];
+        if (!track) return;
+        this.els.playerTitle.textContent = track.title;
+        this.els.playerMeta.textContent = `${track.bpm} BPM · ${track.camelot}`;
+        this.els.playerThumb.src = `https://img.youtube.com/vi/${track.video_id}/mqdefault.jpg`;
+    }
+
+    onPlayTap() {
+        if (this.playerState === 'ready') {
+            // First play — fresh user gesture for iOS
+            const track = this.queue[this.currentIndex];
+            this.engine.warmUpDecks(track.video_id, track.mix_in_point);
+            this.requestMixCommand();
+            this.startPositionMonitor();
+            this.showPlayerBar('playing');
+        } else if (this.playerState === 'paused') {
+            this.engine.resume();
+            this.showPlayerBar('playing');
+        } else if (this.playerState === 'playing') {
+            this.engine.pause();
+            this.showPlayerBar('paused');
+        }
+    }
+
+    onSkipTap() {
+        if (this.playerState === 'ready') return;
+        if (this.engine.isFading) return;
+
+        if (this.mixCommand) {
+            this.engine.crossfadeTo(
+                this.mixCommand.next_video_id,
+                this.mixCommand.next_seek_to,
+                this.mixCommand.fade_duration,
+            );
+            this.mixCommand = null;
+        } else {
+            // No mix command yet — tell backend to advance
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ action: 'track_ended' }));
+            }
+        }
+    }
+
+    formatTime(seconds) {
+        if (!seconds || seconds < 0) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
     requestMixCommand() {
@@ -222,27 +324,53 @@ class DjwalaApp {
         if (this.positionTimer) clearInterval(this.positionTimer);
 
         this.positionTimer = setInterval(() => {
-            if (!this.mixCommand || this.engine.isFading) return;
+            if (this.playerState !== 'playing') return;
 
             const currentTime = this.engine.getCurrentTime();
-            if (currentTime >= this.mixCommand.current_fade_start) {
-                // Time to crossfade!
-                this.engine.crossfadeTo(
-                    this.mixCommand.next_video_id,
-                    this.mixCommand.next_seek_to,
-                    this.mixCommand.fade_duration,
-                );
-                this.mixCommand = null;
+            const duration = this.engine.getDuration();
+
+            // Update progress bar
+            if (duration > 0) {
+                const pct = (currentTime / duration) * 100;
+                this.els.progressFill.style.width = `${pct}%`;
+                this.els.playerElapsed.textContent = this.formatTime(currentTime);
+                this.els.playerRemaining.textContent = `-${this.formatTime(duration - currentTime)}`;
             }
+
+            // Show crossfade zone when mix command is known
+            if (this.mixCommand && duration > 0) {
+                const fadeStartPct = (this.mixCommand.current_fade_start / duration) * 100;
+                this.els.crossfadeZone.style.left = `${fadeStartPct}%`;
+                this.els.crossfadeZone.style.width = `${100 - fadeStartPct}%`;
+                this.els.crossfadeZone.style.display = 'block';
+            }
+
+            // Trigger crossfade at mix point
+            if (this.mixCommand && !this.engine.isFading) {
+                if (currentTime >= this.mixCommand.current_fade_start) {
+                    this.engine.crossfadeTo(
+                        this.mixCommand.next_video_id,
+                        this.mixCommand.next_seek_to,
+                        this.mixCommand.fade_duration,
+                    );
+                    this.mixCommand = null;
+                }
+            }
+
+            // Update crossfade zone pulse
+            this.els.crossfadeZone.classList.toggle('active', this.engine.isFading);
         }, 500);
     }
 
     onTrackEnded() {
-        // Tell backend we've moved to next track
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ action: 'track_ended' }));
             this.requestMixCommand();
         }
+        // Reset crossfade zone and progress for next track
+        this.els.crossfadeZone.style.display = 'none';
+        this.els.crossfadeZone.classList.remove('active');
+        this.els.progressFill.style.width = '0%';
     }
 
     updateNowPlaying() {

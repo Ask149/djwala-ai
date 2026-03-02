@@ -35,6 +35,44 @@ h1 {
     margin-bottom: 2rem;
 }
 
+/* Mode toggle */
+.mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0.75rem;
+}
+
+.mode-btn {
+    padding: 0.4rem 1.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.mode-btn:first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.mode-btn:last-child {
+    border-radius: 0 6px 6px 0;
+    border-left: none;
+}
+
+.mode-btn.active {
+    background: rgba(139, 92, 246, 0.25);
+    color: #fff;
+    border-color: rgba(139, 92, 246, 0.5);
+}
+
+.mode-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+}
+
 .search-row {
     display: flex;
     gap: 0.5rem;

@@ -14,6 +14,8 @@ class DjwalaApp {
         this.engine = new MixEngine(() => this.onTrackEnded());
 
         this.els = {
+            modeToggle: document.querySelector('.mode-toggle'),
+            modeBtns: document.querySelectorAll('.mode-btn'),
             searchInput: document.querySelector('.search-input'),
             goBtn: document.querySelector('.go-btn'),
             nowPlaying: document.querySelector('.now-playing'),
@@ -50,6 +52,9 @@ class DjwalaApp {
     }
 
     bindEvents() {
+        this.els.modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => this.setMode(btn.dataset.mode));
+        });
         this.els.goBtn.addEventListener('click', () => this.startSession());
         this.els.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') this.startSession();
@@ -60,6 +65,18 @@ class DjwalaApp {
         });
         this.els.playBtn.addEventListener('click', () => this.onPlayTap());
         this.els.nextBtn.addEventListener('click', () => this.onSkipTap());
+    }
+
+    setMode(mode) {
+        this.mode = mode;
+        this.els.modeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+        if (mode === 'song') {
+            this.els.searchInput.placeholder = 'Enter a song name... (e.g., "Tum Hi Ho", "Blinding Lights")';
+        } else {
+            this.els.searchInput.placeholder = 'Artist names, comma separated... (e.g., "Arijit Singh, Pritam, AP Dhillon")';
+        }
     }
 
     parseArtists(query) {
@@ -80,8 +97,12 @@ class DjwalaApp {
         const query = this.els.searchInput.value.trim();
         if (!query) return;
 
-        const artists = this.parseArtists(query);
-        this.showArtistChips(artists);
+        if (this.mode === 'artists') {
+            const artists = this.parseArtists(query);
+            this.showArtistChips(artists);
+        } else {
+            this.showArtistChips([query]);  // Show song name as single chip
+        }
 
         this.els.goBtn.disabled = true;
         this.setStatus('Searching YouTube...', true);

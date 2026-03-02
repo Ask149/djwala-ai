@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DjwalaAI</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=9">
+    <link rel="stylesheet" href="/static/css/style.css?v=10">
 </head>
 <body>
     <div class="container">
@@ -14,6 +14,10 @@
         <button class="settings-btn" title="Settings" onclick="app.openSettings()">⚙️</button>
 
         <div class="input-section">
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="artists">Artists</button>
+                <button class="mode-btn" data-mode="song">Song</button>
+            </div>
             <div class="search-row">
                 <input type="text" class="search-input" placeholder="Artist names, comma separated... (e.g., &quot;Arijit Singh, Pritam, AP Dhillon&quot;)">
                 <button class="go-btn">DJ!</button>
@@ -41,8 +45,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=9"></script>
-    <script src="/static/js/app.js?v=9"></script>
+    <script src="/static/js/mix-engine.js?v=10"></script>
+    <script src="/static/js/app.js?v=10"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">

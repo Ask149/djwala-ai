@@ -199,20 +199,65 @@ async def websocket_live(websocket: WebSocket, session_id: str):
 
 # --- Lyrics Proxy ---
 
+LRCLIB_HOST = "lrclib.net"
+LRCLIB_SEARCH_PATH = "/api/search"
+
+
+def _lrclib_search_direct(query: str) -> list:
+    """Direct LRCLIB fetch bypassing DNS — fallback for networks that
+    intercept DNS (e.g. Cisco Umbrella / corporate proxies)."""
+    import http.client
+    import ssl
+    import subprocess
+    import urllib.parse
+
+    # Resolve via Google DNS to get the real IP
+    result = subprocess.run(
+        ["dig", "+short", "@8.8.8.8", LRCLIB_HOST],
+        capture_output=True, text=True, timeout=5,
+    )
+    real_ip = result.stdout.strip().split("\n")[0]
+    if not real_ip:
+        raise ConnectionError("DNS resolution via Google DNS failed")
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    params = urllib.parse.urlencode({"q": query})
+    conn = http.client.HTTPSConnection(real_ip, 443, context=ctx, timeout=5)
+    conn.request("GET", f"{LRCLIB_SEARCH_PATH}?{params}", headers={"Host": LRCLIB_HOST})
+    resp = conn.getresponse()
+    if resp.status != 200:
+        raise ConnectionError(f"LRCLIB returned {resp.status}")
+    body = resp.read()
+    conn.close()
+    return json.loads(body)
+
+
 @app.get("/api/lyrics")
 def lyrics_proxy(q: str = Query(default=None)):
     """Proxy lyrics search to LRCLIB to avoid browser CORS/SSL issues."""
     if not q:
         raise HTTPException(400, "Missing query parameter 'q'")
+
+    # Try standard request first (works on Fly.io / normal networks)
     try:
         resp = requests.get(
-            "https://lrclib.net/api/search",
+            f"https://{LRCLIB_HOST}{LRCLIB_SEARCH_PATH}",
             params={"q": q},
             timeout=5,
         )
         resp.raise_for_status()
         return resp.json()
     except Exception:
+        logger.debug("Standard LRCLIB request failed, trying direct IP fallback")
+
+    # Fallback: bypass DNS interception (for Cisco Umbrella / corporate proxies)
+    try:
+        return _lrclib_search_direct(q)
+    except Exception as exc:
+        logger.warning("Lyrics proxy failed (both paths): %s", exc)
         raise HTTPException(502, "Lyrics service unavailable")
 
 

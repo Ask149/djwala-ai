@@ -66,6 +66,7 @@ class DjwalaApp {
         this.moodId = null;
         this.lyricsData = null;      // parsed synced lyrics array [{time, text}]
         this.lyricsTrackId = null;    // video_id lyrics were fetched for
+        this.lyricsFetched = false;   // true once fetch completes (even if not found)
         this.lyricsVisible = false;
         this.currentLyricIndex = -1;
         this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
@@ -879,12 +880,13 @@ class DjwalaApp {
         if (!track) return;
 
         // Don't re-fetch if already loaded for this track
-        if (this.lyricsTrackId === track.video_id && this.lyricsData !== null) {
+        if (this.lyricsTrackId === track.video_id && this.lyricsFetched) {
             return;
         }
 
         this.lyricsData = null;
         this.lyricsTrackId = track.video_id;
+        this.lyricsFetched = false;
         this.currentLyricIndex = -1;
         this.els.lyricsPanelBody.innerHTML = '<div class="lyrics-loading">Searching for lyrics...</div>';
         this.els.partyLyrics.textContent = '';
@@ -897,6 +899,7 @@ class DjwalaApp {
             const results = await resp.json();
 
             if (!results || results.length === 0) {
+                this.lyricsFetched = true;
                 this.showLyricsNotFound(clean);
                 return;
             }
@@ -906,15 +909,19 @@ class DjwalaApp {
 
             if (best.syncedLyrics) {
                 this.lyricsData = this.parseLRC(best.syncedLyrics);
+                this.lyricsFetched = true;
                 this.renderSyncedLyrics();
             } else if (best.plainLyrics) {
                 this.lyricsData = null; // no synced data
+                this.lyricsFetched = true;
                 this.renderPlainLyrics(best.plainLyrics);
             } else {
+                this.lyricsFetched = true;
                 this.showLyricsNotFound(clean);
             }
         } catch (err) {
             console.warn('[DjwalaAI] Lyrics fetch error:', err);
+            this.lyricsFetched = true;
             this.showLyricsNotFound(clean);
         }
     }

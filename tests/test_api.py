@@ -322,8 +322,10 @@ async def test_analytics_minimal_event(client):
 @patch("djwala.main.requests.get")
 async def test_lyrics_proxy_success(mock_get, client):
     """GET /api/lyrics returns proxied LRCLIB results."""
-    mock_get.return_value.status_code = 200
-    mock_get.return_value.json.return_value = [
+    mock_resp = mock_get.return_value
+    mock_resp.status_code = 200
+    mock_resp.raise_for_status = lambda: None
+    mock_resp.json.return_value = [
         {
             "trackName": "Blinding Lights",
             "artistName": "The Weeknd",
@@ -347,8 +349,10 @@ async def test_lyrics_proxy_success(mock_get, client):
 @patch("djwala.main.requests.get")
 async def test_lyrics_proxy_empty_results(mock_get, client):
     """GET /api/lyrics returns empty array when no results."""
-    mock_get.return_value.status_code = 200
-    mock_get.return_value.json.return_value = []
+    mock_resp = mock_get.return_value
+    mock_resp.status_code = 200
+    mock_resp.raise_for_status = lambda: None
+    mock_resp.json.return_value = []
     resp = await client.get("/api/lyrics?q=asdfghjkl+unknown+song")
     assert resp.status_code == 200
     assert resp.json() == []
@@ -360,10 +364,32 @@ async def test_lyrics_proxy_missing_query(client):
     assert resp.status_code == 400
 
 
+@patch("djwala.main._lrclib_search_direct", side_effect=Exception("DNS fallback failed"))
 @patch("djwala.main.requests.get")
-async def test_lyrics_proxy_upstream_error(mock_get, client):
-    """GET /api/lyrics returns 502 when LRCLIB is down."""
+async def test_lyrics_proxy_upstream_error(mock_get, mock_direct, client):
+    """GET /api/lyrics returns 502 when both LRCLIB paths fail."""
     mock_get.side_effect = Exception("Connection refused")
     resp = await client.get("/api/lyrics?q=test")
     assert resp.status_code == 502
     assert "lyrics" in resp.json()["detail"].lower()
+
+
+@patch("djwala.main._lrclib_search_direct")
+@patch("djwala.main.requests.get")
+async def test_lyrics_proxy_dns_fallback(mock_get, mock_direct, client):
+    """GET /api/lyrics falls back to direct IP when standard request fails."""
+    mock_get.side_effect = Exception("SSL handshake failure")
+    mock_direct.return_value = [
+        {
+            "trackName": "Shape of You",
+            "artistName": "Ed Sheeran",
+            "syncedLyrics": "[00:10.00] I'm in love",
+            "plainLyrics": "I'm in love",
+        }
+    ]
+    resp = await client.get("/api/lyrics?q=Shape+of+You")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["trackName"] == "Shape of You"
+    mock_direct.assert_called_once_with("Shape of You")

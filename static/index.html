@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DjwalaAI</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=5">
+    <link rel="stylesheet" href="/static/css/style.css?v=6">
 </head>
 <body>
     <div class="container">
         <h1>DjwalaAI</h1>
         <p class="subtitle">AI-powered auto-DJ from YouTube</p>
+        <button class="settings-btn" title="Settings" onclick="app.openSettings()">⚙️</button>
 
         <div class="input-section">
             <div class="search-row">
@@ -40,7 +41,40 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=5"></script>
-    <script src="/static/js/app.js?v=5"></script>
+    <script src="/static/js/mix-engine.js?v=6"></script>
+    <script src="/static/js/app.js?v=6"></script>
+    <div class="settings-overlay" id="settingsOverlay">
+        <div class="settings-modal">
+            <div class="settings-header">
+                <h3>Settings</h3>
+                <button class="settings-close" onclick="app.closeSettings()">×</button>
+            </div>
+
+            <div class="settings-body">
+                <label class="settings-label">
+                    YouTube API Key
+                    <span class="key-status" id="keyStatus"></span>
+                </label>
+                <input type="password" class="settings-input" id="apiKeyInput"
+                       placeholder="Paste your YouTube API key here">
+                <div class="settings-actions">
+                    <button class="settings-save" onclick="app.saveApiKey()">Save</button>
+                    <button class="settings-clear" onclick="app.clearApiKey()">Clear</button>
+                </div>
+
+                <details class="api-key-guide">
+                    <summary>How to get a free API key</summary>
+                    <ol>
+                        <li>Go to <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+                        <li>Create a new project (any name)</li>
+                        <li>Search for and enable <strong>YouTube Data API v3</strong></li>
+                        <li>Go to <strong>Credentials → Create Credentials → API Key</strong></li>
+                    </ol>
+                    <p>Free tier: 10,000 requests/day — plenty for personal DJ sessions.</p>
+                </details>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

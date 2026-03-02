@@ -24,11 +24,16 @@ class DjwalaApp {
             queueSection: document.querySelector('.queue'),
             queueList: document.querySelector('.queue-list'),
             artistChips: document.querySelector('.artist-chips'),
+            settingsOverlay: document.getElementById('settingsOverlay'),
+            apiKeyInput: document.getElementById('apiKeyInput'),
+            keyStatus: document.getElementById('keyStatus'),
         };
 
         this.mode = 'artists';
+        this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
         this.bindEvents();
         this.engine.init();
+        this.updateKeyStatus();
     }
 
     bindEvents() {
@@ -63,10 +68,13 @@ class DjwalaApp {
         this.setStatus('Searching YouTube...', true);
 
         try {
+            const body = { mode: this.mode, query };
+            if (this.apiKey) body.youtube_api_key = this.apiKey;
+
             const resp = await fetch('/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: this.mode, query }),
+                body: JSON.stringify(body),
             });
             const data = await resp.json();
             this.sessionId = data.session_id;
@@ -87,6 +95,7 @@ class DjwalaApp {
 
                 if (data.status === 'error') {
                     this.setStatus('Error: ' + data.error);
+                    this.showErrorBanner(data.error);
                     this.els.goBtn.disabled = false;
                     return;
                 }
@@ -285,6 +294,66 @@ class DjwalaApp {
 
     hideStatus() {
         this.els.statusBar.classList.remove('active');
+    }
+
+    openSettings() {
+        this.els.settingsOverlay.classList.add('active');
+        if (this.apiKey) {
+            this.els.apiKeyInput.value = this.apiKey;
+        }
+    }
+
+    closeSettings() {
+        this.els.settingsOverlay.classList.remove('active');
+    }
+
+    saveApiKey() {
+        const key = this.els.apiKeyInput.value.trim();
+        if (!key) return;
+        this.apiKey = key;
+        localStorage.setItem('djwala_youtube_api_key', key);
+        this.updateKeyStatus();
+        this.closeSettings();
+    }
+
+    clearApiKey() {
+        this.apiKey = null;
+        localStorage.removeItem('djwala_youtube_api_key');
+        this.els.apiKeyInput.value = '';
+        this.updateKeyStatus();
+    }
+
+    updateKeyStatus() {
+        const el = this.els.keyStatus;
+        if (this.apiKey) {
+            el.classList.add('saved');
+        } else {
+            el.classList.remove('saved');
+        }
+    }
+
+    showErrorBanner(errorMsg) {
+        // Remove existing banner if any
+        const existing = document.querySelector('.error-banner');
+        if (existing) existing.remove();
+
+        const banner = document.createElement('div');
+        banner.className = 'error-banner active';
+
+        if (!this.apiKey) {
+            banner.innerHTML = `
+                <span>YouTube search failed. Add your API key for reliable access.</span>
+                <button onclick="app.openSettings()">Add Key</button>
+            `;
+        } else {
+            banner.innerHTML = `
+                <span>Search failed. Your API key may be invalid or quota exceeded.</span>
+                <button onclick="app.openSettings()">Check Key</button>
+            `;
+        }
+
+        // Insert before the status bar
+        this.els.statusBar.parentNode.insertBefore(banner, this.els.statusBar);
     }
 }
 

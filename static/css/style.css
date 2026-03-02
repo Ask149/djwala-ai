@@ -1129,3 +1129,210 @@ h1 {
     .lyrics-line { font-size: 0.9rem; padding: 0.35rem 0.5rem; }
     .lyrics-panel-body { padding: 0.75rem 1rem 6rem; }
 }
+
+/* DJ Deck */
+.dj-deck {
+    background: #14141f;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    display: none;
+    overflow: hidden;
+    position: relative;
+}
+
+.dj-deck.active { display: block; }
+
+.deck-plates {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.deck-side {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.deck-right {
+    flex-direction: row-reverse;
+    text-align: right;
+}
+
+.deck-art {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #1e1e2e;
+    flex-shrink: 0;
+    transition: box-shadow 0.5s ease;
+}
+
+.deck-art.glowing {
+    box-shadow: 0 0 20px var(--deck-color, rgba(102, 126, 234, 0.4));
+}
+
+.deck-label {
+    min-width: 0;
+    flex: 1;
+}
+
+.deck-track-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.2rem;
+}
+
+.deck-track-meta {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Crossfader */
+.deck-crossfader {
+    flex-shrink: 0;
+    width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.crossfader-track {
+    width: 48px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    position: relative;
+}
+
+.crossfader-knob {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 50%;
+    transition: left 0.3s ease;
+    box-shadow: 0 0 8px rgba(102, 126, 234, 0.5);
+}
+
+/* Waveforms */
+.deck-waveforms {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0.75rem;
+}
+
+.waveform-canvas {
+    flex: 1;
+    height: 48px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* Deck progress */
+.deck-progress {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.deck-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 2px;
+    transition: width 0.5s linear;
+}
+
+/* Dimmed state for next-up deck */
+.deck-side.dimmed {
+    opacity: 0.35;
+}
+
+.deck-side.dimmed .deck-art {
+    filter: grayscale(0.5);
+}
+
+/* Dynamic background glow */
+body.deck-active {
+    background: radial-gradient(ellipse at 50% 30%,
+        var(--bg-glow, rgba(102, 126, 234, 0.08)) 0%,
+        #0a0a0f 65%);
+    transition: background 1.5s ease;
+}
+
+/* Breathing animation for active album art */
+@keyframes deckBreathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.deck-art.breathing {
+    animation: deckBreathe 4s ease-in-out infinite;
+}
+
+/* DJ Deck mobile */
+@media (max-width: 480px) {
+    .dj-deck { padding: 0.75rem; }
+    .deck-art { width: 56px; height: 56px; border-radius: 6px; }
+    .deck-track-title { font-size: 0.8rem; }
+    .deck-track-meta { font-size: 0.65rem; }
+    .deck-crossfader { width: 40px; }
+    .crossfader-track { width: 32px; }
+    .crossfader-knob { width: 10px; height: 10px; }
+    .waveform-canvas { height: 32px; }
+    .deck-plates { gap: 0.5rem; }
+}
+
+/* DJ Deck in Party Mode */
+.party-overlay .dj-deck-party {
+    display: none;
+}
+
+.party-overlay.active .dj-deck-party {
+    display: block;
+    width: 90vw;
+    max-width: 900px;
+}
+
+.party-overlay .deck-art {
+    width: min(200px, 25vw);
+    height: min(200px, 25vw);
+    border-radius: 12px;
+}
+
+.party-overlay .waveform-canvas {
+    height: 64px;
+}
+
+.party-overlay .deck-track-title {
+    font-size: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+.party-overlay .deck-track-meta {
+    font-size: clamp(0.8rem, 1.5vw, 1rem);
+}
+
+@media (max-width: 480px) {
+    .party-overlay .deck-art {
+        width: 80px;
+        height: 80px;
+    }
+    .party-overlay .waveform-canvas {
+        height: 40px;
+    }
+}

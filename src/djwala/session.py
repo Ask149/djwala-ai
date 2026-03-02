@@ -37,6 +37,7 @@ class Session:
     error: str = ""
     youtube_api_key: str | None = None  # user-provided, in-memory only, never persisted
     mix_length: int = 50
+    seen_ids: set[str] = field(default_factory=set)
 
 
 class SessionManager:
@@ -70,12 +71,31 @@ class SessionManager:
             return self._cache.get(video_id)
         return None
 
+    async def _analyze_track(self, track: TrackInfo, mix_length: int) -> TrackAnalysis:
+        """Analyze a single track, using cache or falling back to estimates."""
+        if self._cache.has(track.video_id):
+            return self._cache.get(track.video_id)
+        try:
+            analysis = await asyncio.to_thread(self._analyzer.analyze, track)
+            self._cache.store(analysis)
+            return analysis
+        except Exception:
+            logger.warning("Analysis failed for %s, using estimates", track.video_id)
+            return self._analyzer.estimate(track, mix_length=mix_length)
+
     async def build_queue(self, session_id: str) -> None:
         """Search YouTube, analyze tracks, build ordered queue."""
         session = self._sessions.get(session_id)
         if not session:
             return
 
+        if session.mode == InputMode.SONG:
+            await self._build_song_queue(session)
+        else:
+            await self._build_artists_queue(session)
+
+    async def _build_artists_queue(self, session: Session) -> None:
+        """Build queue for artists mode (existing behavior)."""
         try:
             # Step 1: Search YouTube
             session.status = SessionStatus.SEARCHING
@@ -96,18 +116,7 @@ class SessionManager:
             batch_size = min(5, len(candidates))
 
             for track in candidates[:batch_size]:
-                if self._cache.has(track.video_id):
-                    analysis = self._cache.get(track.video_id)
-                else:
-                    try:
-                        analysis = await asyncio.to_thread(
-                            self._analyzer.analyze, track
-                        )
-                        self._cache.store(analysis)
-                    except Exception:
-                        logger.warning("Analysis failed for %s (%s), using estimates", track.video_id, track.title)
-                        analysis = self._analyzer.estimate(track, mix_length=session.mix_length)
-                        # Don't cache estimates — real analysis may work later
+                analysis = await self._analyze_track(track, session.mix_length)
                 analyzed.append(analysis)
 
             if not analyzed:
@@ -126,6 +135,51 @@ class SessionManager:
                 error_msg += " — Add your YouTube API key in Settings for reliable access."
             session.error = error_msg
 
+    async def _build_song_queue(self, session: Session) -> None:
+        """Build queue for song mode: seed + YouTube Mix playlist."""
+        try:
+            # Step 1: Find the seed song
+            session.status = SessionStatus.SEARCHING
+            seed = await asyncio.to_thread(
+                self._youtube.search_song, session.query,
+                api_key=session.youtube_api_key,
+            )
+            if not seed:
+                session.status = SessionStatus.ERROR
+                session.error = "Song not found. Try a different search term."
+                return
+
+            session.seen_ids.add(seed.video_id)
+
+            # Step 2: Get related songs from YouTube Mix playlist
+            mix_tracks = await asyncio.to_thread(
+                self._youtube.get_mix_playlist, seed.video_id,
+                api_key=session.youtube_api_key,
+            )
+            for t in mix_tracks:
+                if t.video_id not in session.seen_ids:
+                    session.seen_ids.add(t.video_id)
+                    session.candidates.append(t)
+
+            # Step 3: Analyze seed + first batch
+            session.status = SessionStatus.ANALYZING
+            seed_analysis = await self._analyze_track(seed, session.mix_length)
+
+            batch = session.candidates[:4]
+            analyzed = []
+            for track in batch:
+                analysis = await self._analyze_track(track, session.mix_length)
+                analyzed.append(analysis)
+
+            # Step 4: Seed first, DJ Brain orders the rest
+            session.queue = [seed_analysis] + self._brain.order_playlist(analyzed)
+            session.status = SessionStatus.READY
+
+        except Exception as e:
+            session.status = SessionStatus.ERROR
+            session.error = str(e)
+
+
     def get_mix_command(self, session_id: str) -> MixCommand | None:
         """Get the next mix command for the current position."""
         session = self._sessions.get(session_id)
@@ -141,10 +195,17 @@ class SessionManager:
         return self._brain.plan_mix(outgoing, incoming)
 
     def advance(self, session_id: str) -> None:
-        """Move to the next track."""
+        """Move to the next track. Trims old tracks if queue grows."""
         session = self._sessions.get(session_id)
-        if session and session.current_index + 1 < len(session.queue):
-            session.current_index += 1
+        if not session or session.current_index + 1 >= len(session.queue):
+            return
+        session.current_index += 1
+
+        # Cleanup: keep at most 3 played tracks behind current
+        if session.current_index > 3:
+            trim = session.current_index - 3
+            session.queue = session.queue[trim:]
+            session.current_index -= trim
 
     async def analyze_more(self, session_id: str) -> None:
         """Continue analyzing remaining candidates in the background."""
@@ -156,19 +217,30 @@ class SessionManager:
         for track in session.candidates:
             if track.video_id in analyzed_ids:
                 continue
-            if self._cache.has(track.video_id):
-                analysis = self._cache.get(track.video_id)
-            else:
-                try:
-                    analysis = await asyncio.to_thread(
-                        self._analyzer.analyze, track
-                    )
-                    self._cache.store(analysis)
-                except Exception:
-                    logger.warning("Background analysis failed for %s, using estimates", track.video_id)
-                    analysis = self._analyzer.estimate(track, mix_length=session.mix_length)
+            analysis = await self._analyze_track(track, session.mix_length)
             # Freeze played + currently-playing tracks; only reorder future portion
             played = session.queue[:session.current_index + 1]
             future = session.queue[session.current_index + 1:] + [analysis]
             future_ordered = self._brain.order_playlist(future)
             session.queue = played + future_ordered
+
+        # Rolling queue: fetch more related tracks when running low (song mode)
+        if session.mode == InputMode.SONG:
+            upcoming = len(session.queue) - session.current_index - 1
+            if upcoming < 5 and session.queue:
+                last_vid = session.queue[-1].video_id
+                try:
+                    new_tracks = await asyncio.to_thread(
+                        self._youtube.get_mix_playlist, last_vid,
+                        api_key=session.youtube_api_key,
+                    )
+                    for t in new_tracks:
+                        if t.video_id not in session.seen_ids:
+                            session.seen_ids.add(t.video_id)
+                            analysis = await self._analyze_track(t, session.mix_length)
+                            played = session.queue[:session.current_index + 1]
+                            future = session.queue[session.current_index + 1:] + [analysis]
+                            future_ordered = self._brain.order_playlist(future)
+                            session.queue = played + future_ordered
+                except Exception:
+                    logger.warning("Failed to fetch more tracks for rolling queue")

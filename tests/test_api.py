@@ -270,3 +270,16 @@ async def test_analyze_more_preserves_played_tracks():
     # New track should be appended after current_index
     assert len(session.queue) == 3
     assert session.queue[2].video_id == "vid3"
+
+
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_song_mode(mock_build, client):
+    """POST /session accepts mode: 'song'."""
+    resp = await client.post("/session", json={
+        "mode": "song",
+        "query": "Tum Hi Ho",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    session = manager.get_session(data["session_id"])
+    assert session.mode.value == "song"

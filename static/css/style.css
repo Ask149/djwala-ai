@@ -14,7 +14,7 @@ body {
 .container {
     max-width: 700px;
     width: 100%;
-    padding: 2rem 1rem;
+    padding: 2rem 1rem 7rem; /* added bottom padding for player bar */
 }
 
 h1 {
@@ -165,7 +165,7 @@ h1 {
 /* Responsive — mobile */
 @media (max-width: 480px) {
     .container {
-        padding: 1.25rem 0.75rem;
+        padding: 1.25rem 0.75rem 7rem;
     }
 
     h1 { font-size: 1.5rem; }
@@ -414,4 +414,160 @@ h1 {
     font-size: 0.8rem;
     white-space: nowrap;
     margin-left: 0.75rem;
+}
+
+/* Player Bar */
+.player-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #14141f;
+    border-top: 1px solid #333;
+    z-index: 50;
+    padding: 0.5rem 1rem;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    display: none;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.player-bar.active { display: flex; }
+
+.player-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.player-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #1e1e2e;
+    flex-shrink: 0;
+}
+
+.player-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.player-title {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.player-meta {
+    color: #666;
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+}
+
+.player-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.player-btn {
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 50%;
+    transition: background 0.2s;
+    min-width: 40px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.player-btn:hover { background: rgba(255,255,255,0.1); }
+.player-btn:active { background: rgba(255,255,255,0.15); }
+
+.play-btn {
+    font-size: 1.5rem;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    min-width: 48px;
+    min-height: 48px;
+}
+
+.play-btn:hover { opacity: 0.9; background: linear-gradient(135deg, #667eea, #764ba2); }
+
+/* Ready state — pulsing play button */
+.player-bar.ready .play-btn {
+    animation: pulse-play 2s ease-in-out infinite;
+}
+
+@keyframes pulse-play {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+    50% { transform: scale(1.08); box-shadow: 0 0 16px 4px rgba(102, 126, 234, 0.3); }
+}
+
+/* Progress row */
+.player-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.player-time {
+    font-size: 0.65rem;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+    min-width: 2.5rem;
+}
+
+.player-time:last-child { text-align: right; }
+
+.player-progress {
+    flex: 1;
+    height: 3px;
+    background: #333;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+}
+
+.player-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 2px;
+    transition: width 0.5s linear;
+}
+
+.player-crossfade-zone {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: rgba(118, 75, 162, 0.3);
+    border-radius: 2px;
+    display: none;
+}
+
+.player-crossfade-zone.active {
+    animation: pulse-fade 1s ease-in-out infinite;
+}
+
+@keyframes pulse-fade {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
+}
+
+/* Mobile adjustments for player bar */
+@media (max-width: 480px) {
+    .player-bar { padding: 0.4rem 0.75rem; padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px)); }
+    .player-thumb { width: 40px; height: 40px; }
+    .player-title { font-size: 0.8rem; }
+    .play-btn { min-width: 44px; min-height: 44px; font-size: 1.3rem; }
+    .player-btn { min-width: 36px; min-height: 36px; font-size: 1rem; }
 }

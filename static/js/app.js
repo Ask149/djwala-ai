@@ -590,6 +590,9 @@ class DjwalaApp {
     // --- DJ Deck ---
 
     async showDeck(track, nextTrack) {
+        // Hide the text-only now-playing when deck is visible
+        this.els.nowPlaying.classList.remove('active');
+
         const deck = this.els.djDeck;
         deck.classList.add('active');
         this.deckActive = true;
@@ -720,9 +723,15 @@ class DjwalaApp {
         } else if (this.playerState === 'paused') {
             this.engine.resume();
             this.showPlayerBar('playing');
+            if (this.deckActive) {
+                this.waveformL.startAnimation();
+                this.waveformR.startAnimation();
+            }
         } else if (this.playerState === 'playing') {
             this.engine.pause();
             this.showPlayerBar('paused');
+            this.waveformL.stopAnimation();
+            this.waveformR.stopAnimation();
         }
     }
 

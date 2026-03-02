@@ -18,14 +18,32 @@ body {
 }
 
 h1 {
-    font-size: 2rem;
+    font-size: 2.5rem;
     margin-bottom: 0.5rem;
     background: linear-gradient(135deg, #667eea, #764ba2);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-.subtitle { color: #666; margin-bottom: 2rem; }
+/* Hero */
+.hero {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.hero-tagline {
+    font-size: 1.25rem;
+    color: #ccc;
+    margin-bottom: 0.5rem;
+}
+
+.hero-sub {
+    font-size: 0.9rem;
+    color: #666;
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
 
 /* Input Section */
 .input-section {
@@ -102,6 +120,55 @@ h1 {
 }
 
 .go-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Share button */
+.share-btn {
+    padding: 0.75rem;
+    min-height: 44px;
+    min-width: 44px;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #999;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.share-btn:hover { border-color: #667eea; color: #667eea; }
+
+.share-btn.copied {
+    border-color: #4ade80;
+    color: #4ade80;
+}
+
+.share-btn-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e1e2e;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    color: #e0e0e0;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: tooltipFade 2s ease forwards;
+}
+
+.share-btn-tooltip.copied { border-color: #4ade80; color: #4ade80; }
+
+@keyframes tooltipFade {
+    0% { opacity: 0; transform: translateX(-50%) translateY(4px); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
+}
 
 /* Now Playing */
 .now-playing {
@@ -608,4 +675,57 @@ h1 {
     .player-title { font-size: 0.8rem; }
     .play-btn { min-width: 44px; min-height: 44px; font-size: 1.3rem; }
     .player-btn { min-width: 36px; min-height: 36px; font-size: 1rem; }
+}
+
+/* How it works */
+.how-it-works {
+    margin-top: 2rem;
+    text-align: center;
+}
+
+.how-it-works h3 {
+    color: #555;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1.25rem;
+}
+
+.steps {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+}
+
+.step {
+    flex: 1;
+    max-width: 180px;
+    text-align: center;
+}
+
+.step-icon {
+    font-size: 1.75rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.step h4 {
+    font-size: 0.9rem;
+    color: #ccc;
+    margin-bottom: 0.35rem;
+}
+
+.step p {
+    font-size: 0.8rem;
+    color: #666;
+    line-height: 1.4;
+}
+
+/* Hide how-it-works when mix is active */
+.how-it-works.hidden { display: none; }
+
+@media (max-width: 480px) {
+    .hero-tagline { font-size: 1.1rem; }
+    .hero-sub { font-size: 0.85rem; }
+    .steps { flex-direction: column; align-items: center; gap: 1rem; }
 }

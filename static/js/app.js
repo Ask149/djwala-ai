@@ -18,6 +18,7 @@ class DjwalaApp {
             modeBtns: document.querySelectorAll('.mode-btn'),
             searchInput: document.querySelector('.search-input'),
             goBtn: document.querySelector('.go-btn'),
+            shareBtn: document.querySelector('.share-btn'),
             nowPlaying: document.querySelector('.now-playing'),
             trackTitle: document.querySelector('.track-title'),
             trackMeta: document.querySelector('.track-meta'),
@@ -49,6 +50,18 @@ class DjwalaApp {
         this.bindEvents();
         this.engine.init();
         this.updateKeyStatus();
+        this.loadFromURLParams();
+        this.trackEvent('page_view', { referrer: document.referrer || null });
+    }
+
+    // --- Analytics ---
+
+    trackEvent(event, extra = {}) {
+        try {
+            const body = JSON.stringify({ event, ...extra });
+            const blob = new Blob([body], { type: 'application/json' });
+            navigator.sendBeacon('/analytics', blob);
+        } catch { /* never break the app for analytics */ }
     }
 
     bindEvents() {
@@ -56,6 +69,7 @@ class DjwalaApp {
             btn.addEventListener('click', () => this.setMode(btn.dataset.mode));
         });
         this.els.goBtn.addEventListener('click', () => this.startSession());
+        this.els.shareBtn.addEventListener('click', () => this.shareCurrentMix());
         this.els.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') this.startSession();
         });
@@ -106,6 +120,12 @@ class DjwalaApp {
 
         this.els.goBtn.disabled = true;
         this.setStatus('Searching YouTube...', true);
+
+        // Hide how-it-works when session starts
+        const hiw = document.getElementById('howItWorks');
+        if (hiw) hiw.classList.add('hidden');
+
+        this.trackEvent('mix_start', { mode: this.mode, query });
 
         try {
             const body = { mode: this.mode, query };
@@ -511,6 +531,101 @@ class DjwalaApp {
 
         // Insert before the status bar
         this.els.statusBar.parentNode.insertBefore(banner, this.els.statusBar);
+    }
+
+    // --- Share / URL Params ---
+
+    loadFromURLParams() {
+        const params = new URLSearchParams(window.location.search);
+        const mode = params.get('mode');
+        const query = params.get('q');
+
+        if (!query) return;
+
+        // Set mode if provided (default to artists)
+        if (mode === 'song' || mode === 'artists') {
+            this.setMode(mode);
+        }
+
+        // Pre-fill input
+        this.els.searchInput.value = query;
+
+        // Clean the URL so it doesn't re-trigger on refresh
+        window.history.replaceState({}, '', window.location.pathname);
+
+        // Auto-start the session
+        this.startSession();
+    }
+
+    shareCurrentMix() {
+        const query = this.els.searchInput.value.trim();
+        if (!query) {
+            this.showShareTooltip('Type something first!', false);
+            return;
+        }
+
+        const url = new URL(window.location.origin);
+        url.searchParams.set('mode', this.mode);
+        url.searchParams.set('q', query);
+
+        const shareURL = url.toString();
+
+        this.trackEvent('share', { mode: this.mode, query });
+
+        // Try native share first (mobile)
+        if (navigator.share) {
+            navigator.share({
+                title: 'DjwalaAI Mix',
+                text: this.mode === 'song'
+                    ? `Listen to a DJ mix starting with "${query}"`
+                    : `Listen to a DJ mix of ${query}`,
+                url: shareURL,
+            }).catch(() => {
+                // User cancelled — fall back to clipboard
+                this.copyToClipboard(shareURL);
+            });
+            return;
+        }
+
+        // Desktop fallback: copy to clipboard
+        this.copyToClipboard(shareURL);
+    }
+
+    copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            this.showShareTooltip('Link copied!', true);
+        }).catch(() => {
+            // Fallback for older browsers
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            this.showShareTooltip('Link copied!', true);
+        });
+    }
+
+    showShareTooltip(message, success) {
+        // Remove existing tooltip
+        const existing = this.els.shareBtn.querySelector('.share-btn-tooltip');
+        if (existing) existing.remove();
+
+        const tooltip = document.createElement('span');
+        tooltip.className = 'share-btn-tooltip' + (success ? ' copied' : '');
+        tooltip.textContent = message;
+        this.els.shareBtn.appendChild(tooltip);
+
+        if (success) {
+            this.els.shareBtn.classList.add('copied');
+        }
+
+        setTimeout(() => {
+            tooltip.remove();
+            this.els.shareBtn.classList.remove('copied');
+        }, 2000);
     }
 }
 

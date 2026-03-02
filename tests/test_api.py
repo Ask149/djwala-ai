@@ -283,3 +283,19 @@ async def test_create_session_song_mode(mock_build, client):
     data = resp.json()
     session = manager.get_session(data["session_id"])
     assert session.mode.value == "song"
+
+
+async def test_analytics_endpoint(client):
+    """POST /analytics accepts events and returns 204."""
+    resp = await client.post("/analytics", json={
+        "event": "mix_start",
+        "mode": "artists",
+        "query": "Drake, The Weeknd",
+    })
+    assert resp.status_code == 204
+
+
+async def test_analytics_minimal_event(client):
+    """POST /analytics works with just an event name."""
+    resp = await client.post("/analytics", json={"event": "page_view"})
+    assert resp.status_code == 204

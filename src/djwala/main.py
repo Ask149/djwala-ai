@@ -1,8 +1,10 @@
 """FastAPI application entry point."""
 
 import asyncio
+import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -192,6 +194,39 @@ async def websocket_live(websocket: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         pass
+
+
+# --- Analytics ---
+
+ANALYTICS_FILE = Path(os.getenv("DJWALA_ANALYTICS_FILE", "/tmp/djwala_analytics.jsonl"))
+
+
+class AnalyticsEvent(BaseModel):
+    event: str  # e.g. "mix_start", "share", "mode_switch"
+    mode: str | None = None
+    query: str | None = None
+    referrer: str | None = None
+
+
+@app.post("/analytics", status_code=204)
+async def track_event(req: AnalyticsEvent):
+    """Fire-and-forget analytics. Appends to JSONL file."""
+    try:
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "event": req.event,
+        }
+        if req.mode:
+            entry["mode"] = req.mode
+        if req.query:
+            entry["query"] = req.query
+        if req.referrer:
+            entry["referrer"] = req.referrer
+
+        with open(ANALYTICS_FILE, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass  # Never fail the user request for analytics
 
 
 # Static files must be mounted AFTER API routes to avoid catching API paths

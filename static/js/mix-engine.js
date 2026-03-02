@@ -11,6 +11,7 @@ class MixEngine {
         this.onTrackChange = onTrackChange || (() => {});
         this._playersReady = { A: false, B: false };
         this._pendingPlay = null;
+        this._warmUpPending = false;
     }
 
     init() {
@@ -31,7 +32,7 @@ class MixEngine {
         window.onYouTubeIframeAPIReady = () => {
             this.deckA = new YT.Player('yt-player-a', {
                 height: '1', width: '1',
-                playerVars: { autoplay: 0, controls: 0 },
+                playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
                 events: {
                     onReady: () => { this._playersReady.A = true; this._checkPending(); },
                     onStateChange: (e) => this._onStateChange('A', e),
@@ -39,7 +40,7 @@ class MixEngine {
             });
             this.deckB = new YT.Player('yt-player-b', {
                 height: '1', width: '1',
-                playerVars: { autoplay: 0, controls: 0 },
+                playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
                 events: {
                     onReady: () => { this._playersReady.B = true; this._checkPending(); },
                     onStateChange: (e) => this._onStateChange('B', e),
@@ -80,6 +81,41 @@ class MixEngine {
         return deck ? deck.getCurrentTime() : 0;
     }
 
+    getDuration() {
+        const deck = this.getActiveDeck();
+        return deck ? deck.getDuration() : 0;
+    }
+
+    isPaused() {
+        const deck = this.getActiveDeck();
+        return deck ? deck.getPlayerState() === 2 : false; // 2 = YT.PlayerState.PAUSED
+    }
+
+    pause() {
+        if (this.isFading) return; // Don't pause during crossfade (it's only ~5s)
+        const deck = this.getActiveDeck();
+        if (deck) deck.pauseVideo();
+    }
+
+    resume() {
+        if (this.isFading) return;
+        const deck = this.getActiveDeck();
+        if (deck) deck.playVideo();
+    }
+
+    warmUpDecks(videoId, seekTo) {
+        // Play on active deck (normal)
+        const active = this.getActiveDeck();
+        active.setVolume(100);
+        active.loadVideoById({ videoId, startSeconds: seekTo });
+
+        // Warm up inactive deck for iOS — load muted, pause once it starts
+        const inactive = this.getInactiveDeck();
+        inactive.setVolume(0);
+        inactive.loadVideoById({ videoId, startSeconds: 0 });
+        this._warmUpPending = true;
+    }
+
     crossfadeTo(nextVideoId, seekTo, fadeDuration) {
         if (this.isFading) return;
         this.isFading = true;
@@ -117,10 +153,18 @@ class MixEngine {
     }
 
     _onStateChange(deck, event) {
+        // Handle warm-up: pause inactive deck once it starts playing
+        if (this._warmUpPending && event.data === 1) { // YT.PlayerState.PLAYING
+            const isActive = (deck === this.activeDeck);
+            if (!isActive) {
+                this.getInactiveDeck().pauseVideo();
+                this._warmUpPending = false;
+            }
+        }
+
         // YT.PlayerState.ENDED = 0
         if (event.data === 0 && !this.isFading) {
-            const deckLabel = deck;
-            const isActive = (deckLabel === this.activeDeck);
+            const isActive = (deck === this.activeDeck);
             if (isActive) {
                 this.onTrackChange();
             }

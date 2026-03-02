@@ -1,6 +1,140 @@
 // static/js/app.js
 // Main application — connects UI, WebSocket, and MixEngine
 
+// --- Waveform Renderer ---
+// Generates simulated waveform bars from track metadata (BPM, energy, video_id)
+// and animates a playhead + BPM-synced pulse
+
+class WaveformRenderer {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.bars = [];
+        this.bpm = 120;
+        this.playheadPct = 0;
+        this.color = { r: 102, g: 126, b: 234 }; // default purple-blue
+        this.animId = null;
+        this.startTime = 0;
+    }
+
+    // Deterministic hash from video_id for consistent waveform per track
+    _hash(str) {
+        let h = 0;
+        for (let i = 0; i < str.length; i++) {
+            h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+        }
+        return Math.abs(h);
+    }
+
+    // Seeded pseudo-random from hash
+    _seededRandom(seed) {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+    }
+
+    generate(track) {
+        const { video_id, bpm, energy, duration } = track;
+        this.bpm = bpm || 120;
+        const numBars = Math.max(40, Math.floor((duration || 180) / 2));
+        const seed = this._hash(video_id || 'default');
+        const energyVal = energy || 0.6;
+
+        this.bars = [];
+        for (let i = 0; i < numBars; i++) {
+            const r = this._seededRandom(seed + i * 7);
+            // Scale height by energy: low energy = 0.2-0.5, high = 0.4-1.0
+            const minH = 0.15 + energyVal * 0.15;
+            const maxH = 0.4 + energyVal * 0.6;
+            this.bars.push(minH + r * (maxH - minH));
+        }
+
+        this.startTime = performance.now();
+        this.playheadPct = 0;
+    }
+
+    setColor(r, g, b) {
+        this.color = { r, g, b };
+    }
+
+    setPlayhead(pct) {
+        this.playheadPct = Math.max(0, Math.min(1, pct));
+    }
+
+    render() {
+        const canvas = this.canvas;
+        const ctx = this.ctx;
+        const dpr = window.devicePixelRatio || 1;
+
+        // Handle canvas sizing
+        const rect = canvas.getBoundingClientRect();
+        if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (this.bars.length === 0) return;
+
+        const barW = Math.max(2, (w / this.bars.length) - 1);
+        const gap = 1;
+        const now = performance.now();
+        const beatInterval = 60000 / this.bpm; // ms per beat
+        const beatPhase = ((now - this.startTime) % beatInterval) / beatInterval;
+        const pulse = 1 + 0.08 * Math.sin(beatPhase * Math.PI * 2);
+
+        const { r, g, b } = this.color;
+
+        for (let i = 0; i < this.bars.length; i++) {
+            const x = i * (barW + gap);
+            const barPct = i / this.bars.length;
+            let barH = this.bars[i] * h * pulse;
+
+            // Dim bars past the playhead
+            let alpha = 0.6;
+            if (barPct < this.playheadPct) {
+                alpha = 0.25;
+            } else if (Math.abs(barPct - this.playheadPct) < 0.02) {
+                alpha = 1.0; // bright at playhead
+                barH *= 1.15;
+            }
+
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+
+            // Draw bar centered vertically
+            const y = (h - barH) / 2;
+            ctx.fillRect(x, y, barW, barH);
+        }
+
+        // Playhead line
+        const phX = this.playheadPct * w;
+        ctx.fillStyle = `rgba(255, 255, 255, 0.8)`;
+        ctx.fillRect(phX - 1, 0, 2, h);
+    }
+
+    startAnimation() {
+        const loop = () => {
+            this.render();
+            this.animId = requestAnimationFrame(loop);
+        };
+        loop();
+    }
+
+    stopAnimation() {
+        if (this.animId) {
+            cancelAnimationFrame(this.animId);
+            this.animId = null;
+        }
+    }
+
+    destroy() {
+        this.stopAnimation();
+    }
+}
+
 class DjwalaApp {
     constructor() {
         this.sessionId = null;

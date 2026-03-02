@@ -254,6 +254,18 @@ class DjwalaApp {
             lyricsPanelBody: document.getElementById('lyricsPanelBody'),
             lyricsPanelClose: document.getElementById('lyricsPanelClose'),
             partyLyrics: document.getElementById('partyLyrics'),
+            // DJ Deck
+            djDeck: document.getElementById('djDeck'),
+            deckArtLeft: document.getElementById('deckArtLeft'),
+            deckArtRight: document.getElementById('deckArtRight'),
+            deckTitleLeft: document.getElementById('deckTitleLeft'),
+            deckTitleRight: document.getElementById('deckTitleRight'),
+            deckMetaLeft: document.getElementById('deckMetaLeft'),
+            deckMetaRight: document.getElementById('deckMetaRight'),
+            crossfaderKnob: document.getElementById('crossfaderKnob'),
+            waveformLeft: document.getElementById('waveformLeft'),
+            waveformRight: document.getElementById('waveformRight'),
+            deckProgressFill: document.getElementById('deckProgressFill'),
         };
 
         this.mode = 'artists';
@@ -263,6 +275,12 @@ class DjwalaApp {
         this.lyricsFetched = false;   // true once fetch completes (even if not found)
         this.lyricsVisible = false;
         this.currentLyricIndex = -1;
+        // DJ Deck state
+        this.waveformL = new WaveformRenderer(document.getElementById('waveformLeft'));
+        this.waveformR = new WaveformRenderer(document.getElementById('waveformRight'));
+        this.colorExtractor = new ColorExtractor();
+        this.deckActive = false;
+        this.deckFading = false;
         this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
         this.mixLength = parseInt(localStorage.getItem('djwala_mix_length') || '50', 10);
         this.bindEvents();
@@ -520,6 +538,11 @@ class DjwalaApp {
         this.renderTimeline();
         this.updatePageTitle();
         this.showPlayerBar('ready');
+
+        // Show DJ deck
+        const track = this.queue[this.currentIndex];
+        const nextTrack = this.queue[this.currentIndex + 1] || null;
+        this.showDeck(track, nextTrack);
     }
 
     showPlayerBar(state) {
@@ -558,6 +581,119 @@ class DjwalaApp {
         this.els.playerTitle.textContent = track.title;
         this.els.playerMeta.textContent = `${track.bpm} BPM · ${track.camelot}`;
         this.els.playerThumb.src = `https://img.youtube.com/vi/${track.video_id}/mqdefault.jpg`;
+    }
+
+    // --- DJ Deck ---
+
+    async showDeck(track, nextTrack) {
+        const deck = this.els.djDeck;
+        deck.classList.add('active');
+        this.deckActive = true;
+        document.body.classList.add('deck-active');
+
+        // Left deck = current track
+        this.els.deckArtLeft.src = `/api/thumb?v=${track.video_id}`;
+        this.els.deckTitleLeft.textContent = track.title;
+        this.els.deckMetaLeft.textContent = `${track.bpm} BPM · ${track.camelot}`;
+        this.els.deckArtLeft.classList.add('breathing');
+        this.els.deckArtLeft.classList.add('glowing');
+
+        // Right deck = next track (dimmed) or empty
+        const right = this.els.djDeck.querySelector('.deck-right');
+        if (nextTrack) {
+            this.els.deckArtRight.src = `/api/thumb?v=${nextTrack.video_id}`;
+            this.els.deckTitleRight.textContent = nextTrack.title;
+            this.els.deckMetaRight.textContent = `${nextTrack.bpm} BPM · ${nextTrack.camelot}`;
+            right.classList.add('dimmed');
+            right.classList.remove('dimmed-hide');
+        } else {
+            this.els.deckTitleRight.textContent = '';
+            this.els.deckMetaRight.textContent = '';
+            this.els.deckArtRight.src = '';
+            right.classList.add('dimmed');
+        }
+
+        // Generate waveforms
+        this.waveformL.generate(track);
+        if (nextTrack) this.waveformR.generate(nextTrack);
+        this.waveformL.startAnimation();
+        this.waveformR.startAnimation();
+
+        // Extract color from current track
+        const color = await this.colorExtractor.extract(track.video_id);
+        this.waveformL.setColor(color.r, color.g, color.b);
+        this.els.deckArtLeft.style.setProperty('--deck-color', `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)`);
+        document.body.style.setProperty('--bg-glow', `rgba(${color.r}, ${color.g}, ${color.b}, 0.1)`);
+
+        // Crossfader to left
+        this.els.crossfaderKnob.style.left = '0%';
+    }
+
+    async startDeckCrossfade(outTrack, inTrack) {
+        this.deckFading = true;
+
+        // Activate right deck
+        const right = this.els.djDeck.querySelector('.deck-right');
+        right.classList.remove('dimmed');
+        this.els.deckArtRight.classList.add('breathing');
+
+        // Extract incoming color
+        const inColor = await this.colorExtractor.extract(inTrack.video_id);
+        this.waveformR.setColor(inColor.r, inColor.g, inColor.b);
+        this.els.deckArtRight.classList.add('glowing');
+        this.els.deckArtRight.style.setProperty('--deck-color', `rgba(${inColor.r}, ${inColor.g}, ${inColor.b}, 0.5)`);
+    }
+
+    updateDeckCrossfade(progress) {
+        // progress: 0 = start, 1 = complete
+        if (!this.deckFading) return;
+
+        // Move crossfader knob
+        this.els.crossfaderKnob.style.left = `${progress * 100}%`;
+    }
+
+    completeDeckCrossfade(newTrack, nextTrack) {
+        this.deckFading = false;
+
+        // Shift: incoming becomes left deck, load next on right
+        this.els.deckArtLeft.src = this.els.deckArtRight.src;
+        this.els.deckTitleLeft.textContent = this.els.deckTitleRight.textContent;
+        this.els.deckMetaLeft.textContent = this.els.deckMetaRight.textContent;
+        this.els.deckArtLeft.classList.add('breathing', 'glowing');
+
+        // Copy color from right to left
+        const rightColor = this.els.deckArtRight.style.getPropertyValue('--deck-color');
+        this.els.deckArtLeft.style.setProperty('--deck-color', rightColor);
+
+        // Swap waveform data
+        this.waveformL.bars = [...this.waveformR.bars];
+        this.waveformL.bpm = this.waveformR.bpm;
+        this.waveformL.color = { ...this.waveformR.color };
+        this.waveformL.startTime = performance.now();
+        this.waveformL.playheadPct = 0;
+
+        // Update background
+        const c = this.waveformR.color;
+        document.body.style.setProperty('--bg-glow', `rgba(${c.r}, ${c.g}, ${c.b}, 0.1)`);
+
+        // Reset crossfader
+        this.els.crossfaderKnob.style.left = '0%';
+
+        // Load next track on right (dimmed)
+        const right = this.els.djDeck.querySelector('.deck-right');
+        if (nextTrack) {
+            this.els.deckArtRight.src = `/api/thumb?v=${nextTrack.video_id}`;
+            this.els.deckTitleRight.textContent = nextTrack.title;
+            this.els.deckMetaRight.textContent = `${nextTrack.bpm} BPM · ${nextTrack.camelot}`;
+            right.classList.add('dimmed');
+            this.waveformR.generate(nextTrack);
+            this.els.deckArtRight.classList.remove('breathing', 'glowing');
+        } else {
+            this.els.deckTitleRight.textContent = '';
+            this.els.deckMetaRight.textContent = '';
+            this.els.deckArtRight.src = '';
+            right.classList.add('dimmed');
+        }
     }
 
     onPlayTap() {
@@ -646,6 +782,18 @@ class DjwalaApp {
             // Trigger crossfade at mix point
             if (this.mixCommand && !this.engine.isFading) {
                 if (currentTime >= this.mixCommand.current_fade_start) {
+                    // Start deck crossfade animation
+                    if (this.deckActive) {
+                        const nextTrack = this.queue[this.currentIndex + 1];
+                        if (nextTrack) {
+                            this.startDeckCrossfade(
+                                this.queue[this.currentIndex],
+                                nextTrack
+                            );
+                        }
+                    }
+                    this._fadeStartTime = performance.now();
+                    this._lastFadeDuration = this.mixCommand.fade_duration;
                     this.engine.crossfadeTo(
                         this.mixCommand.next_video_id,
                         this.mixCommand.next_seek_to,
@@ -658,8 +806,23 @@ class DjwalaApp {
             // Update crossfade zone pulse
             this.els.crossfadeZone.classList.toggle('active', this.engine.isFading);
 
+            // Animate crossfader during fade
+            if (this.engine.isFading && this.deckFading && this.mixCommand === null) {
+                const elapsed = (performance.now() - (this._fadeStartTime || performance.now())) / 1000;
+                const fadeDur = this._lastFadeDuration || 5;
+                const fadeProgress = Math.min(elapsed / fadeDur, 1);
+                this.updateDeckCrossfade(fadeProgress);
+            }
+
             // Sync lyrics with current playback position
             this.syncLyrics(currentTime);
+
+            // Update DJ deck
+            if (this.deckActive && duration > 0) {
+                const pct = currentTime / duration;
+                this.waveformL.setPlayhead(pct);
+                this.els.deckProgressFill.style.width = `${pct * 100}%`;
+            }
         }, 500);
     }
 
@@ -678,6 +841,14 @@ class DjwalaApp {
         // Refresh lyrics for new track if panel is open
         if (this.lyricsVisible) {
             this.fetchAndShowLyrics();
+        }
+        // Update DJ deck after track transition
+        if (this.deckActive) {
+            const newTrack = this.queue[this.currentIndex];
+            const nextTrack = this.queue[this.currentIndex + 1] || null;
+            if (newTrack) {
+                this.completeDeckCrossfade(newTrack, nextTrack);
+            }
         }
     }
 

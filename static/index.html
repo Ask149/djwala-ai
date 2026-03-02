@@ -25,7 +25,7 @@
     <meta name="theme-color" content="#0a0a0f">
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=14">
+    <link rel="stylesheet" href="/static/css/style.css?v=15">
 </head>
 <body>
     <div class="container">
@@ -77,6 +77,37 @@
             <div class="next-up"></div>
         </div>
 
+        <div class="dj-deck" id="djDeck">
+            <div class="deck-plates">
+                <div class="deck-side deck-left" id="deckLeft">
+                    <img class="deck-art" id="deckArtLeft" src="" alt="">
+                    <div class="deck-label">
+                        <div class="deck-track-title" id="deckTitleLeft"></div>
+                        <div class="deck-track-meta" id="deckMetaLeft"></div>
+                    </div>
+                </div>
+                <div class="deck-crossfader" id="deckCrossfader">
+                    <div class="crossfader-track">
+                        <div class="crossfader-knob" id="crossfaderKnob"></div>
+                    </div>
+                </div>
+                <div class="deck-side deck-right" id="deckRight">
+                    <img class="deck-art" id="deckArtRight" src="" alt="">
+                    <div class="deck-label">
+                        <div class="deck-track-title" id="deckTitleRight"></div>
+                        <div class="deck-track-meta" id="deckMetaRight"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="deck-waveforms">
+                <canvas class="waveform-canvas" id="waveformLeft" height="48"></canvas>
+                <canvas class="waveform-canvas" id="waveformRight" height="48"></canvas>
+            </div>
+            <div class="deck-progress">
+                <div class="deck-progress-fill" id="deckProgressFill"></div>
+            </div>
+        </div>
+
         <div class="mix-timeline" id="mixTimeline">
             <div class="timeline-tracks" id="timelineTracks"></div>
             <div class="timeline-playhead" id="timelinePlayhead"></div>
@@ -111,8 +142,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=14"></script>
-    <script src="/static/js/app.js?v=14"></script>
+    <script src="/static/js/mix-engine.js?v=15"></script>
+    <script src="/static/js/app.js?v=15"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">

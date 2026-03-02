@@ -314,3 +314,56 @@ async def test_analytics_minimal_event(client):
     """POST /analytics works with just an event name."""
     resp = await client.post("/analytics", json={"event": "page_view"})
     assert resp.status_code == 204
+
+
+# --- Lyrics Proxy ---
+
+
+@patch("djwala.main.requests.get")
+async def test_lyrics_proxy_success(mock_get, client):
+    """GET /api/lyrics returns proxied LRCLIB results."""
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = [
+        {
+            "trackName": "Blinding Lights",
+            "artistName": "The Weeknd",
+            "syncedLyrics": "[00:15.00] I said ooh",
+            "plainLyrics": "I said ooh",
+        }
+    ]
+    resp = await client.get("/api/lyrics?q=Blinding+Lights")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["trackName"] == "Blinding Lights"
+    assert data[0]["syncedLyrics"] == "[00:15.00] I said ooh"
+    mock_get.assert_called_once_with(
+        "https://lrclib.net/api/search",
+        params={"q": "Blinding Lights"},
+        timeout=5,
+    )
+
+
+@patch("djwala.main.requests.get")
+async def test_lyrics_proxy_empty_results(mock_get, client):
+    """GET /api/lyrics returns empty array when no results."""
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = []
+    resp = await client.get("/api/lyrics?q=asdfghjkl+unknown+song")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+async def test_lyrics_proxy_missing_query(client):
+    """GET /api/lyrics without q param returns 400."""
+    resp = await client.get("/api/lyrics")
+    assert resp.status_code == 400
+
+
+@patch("djwala.main.requests.get")
+async def test_lyrics_proxy_upstream_error(mock_get, client):
+    """GET /api/lyrics returns 502 when LRCLIB is down."""
+    mock_get.side_effect = Exception("Connection refused")
+    resp = await client.get("/api/lyrics?q=test")
+    assert resp.status_code == 502
+    assert "lyrics" in resp.json()["detail"].lower()

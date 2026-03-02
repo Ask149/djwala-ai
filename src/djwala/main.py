@@ -7,7 +7,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+import requests
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -194,6 +195,25 @@ async def websocket_live(websocket: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         pass
+
+
+# --- Lyrics Proxy ---
+
+@app.get("/api/lyrics")
+def lyrics_proxy(q: str = Query(default=None)):
+    """Proxy lyrics search to LRCLIB to avoid browser CORS/SSL issues."""
+    if not q:
+        raise HTTPException(400, "Missing query parameter 'q'")
+    try:
+        resp = requests.get(
+            "https://lrclib.net/api/search",
+            params={"q": q},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        raise HTTPException(502, "Lyrics service unavailable")
 
 
 # --- Analytics ---

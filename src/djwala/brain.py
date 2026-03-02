@@ -109,6 +109,10 @@ class DJBrain:
         """Plan the mix transition between two tracks."""
         fade_duration = self.crossfade_duration(outgoing, incoming)
 
+        # Cap fade at 50% of the outgoing track's play time for short clips
+        play_time = outgoing.mix_out_point - outgoing.mix_in_point
+        fade_duration = min(fade_duration, play_time * 0.5)
+
         return MixCommand(
             action="fade_to_next",
             current_fade_start=outgoing.mix_out_point,

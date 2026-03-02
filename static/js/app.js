@@ -892,7 +892,7 @@ class DjwalaApp {
         const clean = this.cleanTrackTitle(track.title);
 
         try {
-            const resp = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(clean)}`);
+            const resp = await fetch(`/api/lyrics?q=${encodeURIComponent(clean)}`);
             if (!resp.ok) throw new Error('LRCLIB search failed');
             const results = await resp.json();
 

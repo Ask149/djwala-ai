@@ -87,9 +87,9 @@ class AudioAnalyzer:
         energy_curve = self._generate_energy_curve(int(duration), energy_level, track.video_id)
         
         # Step 6: Calculate mix points from slider + genre energy
-        # Slider endpoints: short mix (0) skips more, full song (100) plays nearly all
-        SHORT_IN, SHORT_OUT = 0.15, 0.70   # slider=0
-        FULL_IN, FULL_OUT = 0.02, 0.97     # slider=100
+        # Slider endpoints: short mix (0) plays a quick clip, full song (100) plays nearly all
+        SHORT_IN, SHORT_OUT = 0.05, 0.15   # slider=0: ~20-30s clip
+        FULL_IN, FULL_OUT = 0.02, 0.97     # slider=100: near full song
         
         t = max(0, min(100, mix_length)) / 100.0
         base_in = SHORT_IN + t * (FULL_IN - SHORT_IN)
@@ -111,10 +111,10 @@ class AudioAnalyzer:
         # Clamp mix_in: at least 8s (skip label logos), at most 25s
         mix_in = max(8.0, min(25.0, mix_in))
         
-        # Ensure at least 60s of play time; if not, fall back to relaxed values
-        if mix_out - mix_in < 60.0:
+        # Ensure at least 20s of play time; if not, fall back to relaxed values
+        if mix_out - mix_in < 20.0:
             mix_in = 8.0
-            mix_out = max(mix_in + 60.0, duration - 10.0)
+            mix_out = max(mix_in + 20.0, duration - 10.0)
         
         mix_in_point = round(mix_in, 1)
         mix_out_point = round(mix_out, 1)

@@ -6,15 +6,16 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from starlette.testclient import TestClient
 
-from djwala.main import app, manager
+from djwala.main import app, limiter, manager
 from djwala.models import InputMode, TrackAnalysis, TrackInfo
 from djwala.session import SessionStatus
 
 
 @pytest.fixture(autouse=True)
 def _clear_sessions():
-    """Reset manager state between tests."""
+    """Reset manager state and rate limiter between tests."""
     manager._sessions.clear()
+    limiter.reset()
     yield
     manager._sessions.clear()
 
@@ -107,6 +108,44 @@ async def test_get_session_queue(mock_build, client):
 async def test_get_nonexistent_session(client):
     resp = await client.get("/session/nonexistent/queue")
     assert resp.status_code == 404
+
+
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_with_mix_length(mock_build, client):
+    """POST /session accepts optional mix_length."""
+    resp = await client.post("/session", json={
+        "mode": "artists",
+        "query": "Arijit Singh",
+        "mix_length": 75,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    session = manager.get_session(data["session_id"])
+    assert session.mix_length == 75
+
+
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_default_mix_length(mock_build, client):
+    """POST /session defaults mix_length to 50."""
+    resp = await client.post("/session", json={
+        "mode": "artists",
+        "query": "Arijit Singh",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    session = manager.get_session(data["session_id"])
+    assert session.mix_length == 50
+
+
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_mix_length_validation(mock_build, client):
+    """POST /session rejects mix_length outside 0-100."""
+    resp = await client.post("/session", json={
+        "mode": "artists",
+        "query": "test",
+        "mix_length": 150,
+    })
+    assert resp.status_code == 422  # Pydantic validation error
 
 
 # --- Helpers and fixtures for WebSocket / session tests ---

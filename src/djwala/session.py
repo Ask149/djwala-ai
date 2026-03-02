@@ -36,6 +36,7 @@ class Session:
     current_index: int = 0
     error: str = ""
     youtube_api_key: str | None = None  # user-provided, in-memory only, never persisted
+    mix_length: int = 50
 
 
 class SessionManager:
@@ -48,13 +49,14 @@ class SessionManager:
         self._brain = DJBrain()
         self._cache = AnalysisCache(db_path=database_path)
 
-    def create_session(self, mode: InputMode, query: str, youtube_api_key: str | None = None) -> Session:
+    def create_session(self, mode: InputMode, query: str, youtube_api_key: str | None = None, mix_length: int = 50) -> Session:
         session_id = str(uuid.uuid4())[:8]
         session = Session(
             session_id=session_id,
             mode=mode,
             query=query,
             youtube_api_key=youtube_api_key,
+            mix_length=mix_length,
         )
         self._sessions[session_id] = session
         return session

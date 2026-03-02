@@ -1,7 +1,5 @@
 """FastAPI application entry point."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import os
@@ -10,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -59,6 +57,7 @@ class SessionCreate(BaseModel):
     mode: str
     query: str
     youtube_api_key: str | None = None
+    mix_length: int = Field(default=50, ge=0, le=100)
 
 
 @app.get("/health")
@@ -85,7 +84,7 @@ async def create_session(request: Request, req: SessionCreate):
     except ValueError:
         raise HTTPException(400, f"Invalid mode: {req.mode}")
 
-    session = manager.create_session(mode, req.query, youtube_api_key=req.youtube_api_key)
+    session = manager.create_session(mode, req.query, youtube_api_key=req.youtube_api_key, mix_length=req.mix_length)
     # Start building queue in background
     task = asyncio.create_task(
         manager.build_queue(session.session_id),

@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from djwala.youtube import YouTubeSearch
+from djwala.youtube_api import YouTubeAPISearch
 from djwala.models import InputMode, TrackInfo
 
 
@@ -234,3 +235,70 @@ class TestSearchApiKeyFallback:
         mock_cls.assert_called_once_with("user-key-123")
         assert len(results) == 1
         assert results[0].video_id == "abc"
+
+
+class TestYouTubeAPIPlaylistItems:
+    """Test YouTubeAPISearch.get_playlist_items() for mix playlists."""
+
+    def test_get_playlist_items_returns_tracks(self):
+        """get_playlist_items extracts tracks from a playlist, excluding seed."""
+        api = YouTubeAPISearch(api_key="fake-key")
+
+        mock_playlist_response = MagicMock()
+        mock_playlist_response.status_code = 200
+        mock_playlist_response.json.return_value = {
+            "items": [
+                {"snippet": {"resourceId": {"videoId": "seed1"}, "title": "Seed Song", "channelTitle": "Ch1"}},
+                {"snippet": {"resourceId": {"videoId": "rel1"}, "title": "Related 1", "channelTitle": "Ch2"}},
+                {"snippet": {"resourceId": {"videoId": "rel2"}, "title": "Related 2", "channelTitle": "Ch3"}},
+            ]
+        }
+
+        mock_details_response = MagicMock()
+        mock_details_response.status_code = 200
+        mock_details_response.json.return_value = {
+            "items": [
+                {"id": "rel1", "contentDetails": {"duration": "PT3M30S"}},
+                {"id": "rel2", "contentDetails": {"duration": "PT4M15S"}},
+            ]
+        }
+
+        with patch("djwala.youtube_api.requests.get", side_effect=[mock_playlist_response, mock_details_response]):
+            tracks = api.get_playlist_items("RDseed1", exclude_id="seed1")
+
+        assert len(tracks) == 2
+        assert tracks[0].video_id == "rel1"
+        assert tracks[0].title == "Related 1"
+        assert tracks[0].duration == 210.0
+        assert tracks[1].video_id == "rel2"
+
+    def test_get_playlist_items_filters_short_tracks(self):
+        """get_playlist_items skips tracks shorter than 60 seconds."""
+        api = YouTubeAPISearch(api_key="fake-key")
+
+        mock_playlist_response = MagicMock()
+        mock_playlist_response.status_code = 200
+        mock_playlist_response.json.return_value = {
+            "items": [
+                {"snippet": {"resourceId": {"videoId": "short1"}, "title": "Short Clip", "channelTitle": "Ch"}},
+            ]
+        }
+
+        mock_details_response = MagicMock()
+        mock_details_response.status_code = 200
+        mock_details_response.json.return_value = {
+            "items": [
+                {"id": "short1", "contentDetails": {"duration": "PT30S"}},
+            ]
+        }
+
+        with patch("djwala.youtube_api.requests.get", side_effect=[mock_playlist_response, mock_details_response]):
+            tracks = api.get_playlist_items("RDxyz", exclude_id="xyz")
+
+        assert len(tracks) == 0
+
+    def test_get_playlist_items_no_key_raises(self):
+        """get_playlist_items raises ValueError without API key."""
+        api = YouTubeAPISearch(api_key=None)
+        with pytest.raises(ValueError, match="API key required"):
+            api.get_playlist_items("RDxyz")

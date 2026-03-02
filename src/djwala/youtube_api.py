@@ -85,6 +85,64 @@ class YouTubeAPISearch:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"YouTube API request failed: {e}")
     
+    def get_playlist_items(self, playlist_id: str, exclude_id: str = "", max_results: int = 50) -> list[TrackInfo]:
+        """Get items from a YouTube playlist (e.g., RD{videoId} for Mix)."""
+        if not self.api_key:
+            raise ValueError(
+                "YouTube API key required. Set DJWALA_YOUTUBE_API_KEY environment variable."
+            )
+
+        params = {
+            "part": "snippet",
+            "playlistId": playlist_id,
+            "maxResults": min(max_results, 50),
+            "key": self.api_key,
+        }
+
+        response = requests.get(f"{self.base_url}/playlistItems", params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        video_ids = []
+        snippets = {}
+        for item in data.get("items", []):
+            vid = item["snippet"]["resourceId"]["videoId"]
+            if vid == exclude_id:
+                continue
+            video_ids.append(vid)
+            snippets[vid] = item["snippet"]
+
+        if not video_ids:
+            return []
+
+        # Batch fetch durations
+        details_params = {
+            "part": "contentDetails",
+            "id": ",".join(video_ids),
+            "key": self.api_key,
+        }
+        details = requests.get(f"{self.base_url}/videos", params=details_params, timeout=10)
+        details.raise_for_status()
+
+        durations = {}
+        for item in details.json().get("items", []):
+            durations[item["id"]] = self._parse_duration(item["contentDetails"]["duration"])
+
+        tracks = []
+        for vid in video_ids:
+            duration = durations.get(vid, 0)
+            if duration < 60 or duration > 600:
+                continue
+            snippet = snippets[vid]
+            tracks.append(TrackInfo(
+                video_id=vid,
+                title=snippet["title"],
+                duration=float(duration),
+                channel=snippet.get("channelTitle", ""),
+            ))
+
+        return tracks
+    
     @staticmethod
     def _parse_duration(duration_str: str) -> int:
         """Parse ISO 8601 duration (PT4M13S) to seconds."""

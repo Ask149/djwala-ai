@@ -42,6 +42,17 @@ class DjwalaApp {
             playerRemaining: document.getElementById('playerRemaining'),
             progressFill: document.getElementById('playerProgressFill'),
             crossfadeZone: document.getElementById('playerCrossfadeZone'),
+            mixTimeline: document.getElementById('mixTimeline'),
+            timelineTracks: document.getElementById('timelineTracks'),
+            timelinePlayhead: document.getElementById('timelinePlayhead'),
+            partyBtn: document.getElementById('partyBtn'),
+            partyOverlay: document.getElementById('partyOverlay'),
+            partyArt: document.getElementById('partyArt'),
+            partyTitle: document.getElementById('partyTitle'),
+            partyMeta: document.getElementById('partyMeta'),
+            partyNext: document.getElementById('partyNext'),
+            partyExit: document.getElementById('partyExit'),
+            partyProgressFill: document.getElementById('partyProgressFill'),
         };
 
         this.mode = 'artists';
@@ -79,6 +90,8 @@ class DjwalaApp {
         });
         this.els.playBtn.addEventListener('click', () => this.onPlayTap());
         this.els.nextBtn.addEventListener('click', () => this.onSkipTap());
+        this.els.partyBtn.addEventListener('click', () => this.togglePartyMode());
+        this.els.partyExit.addEventListener('click', () => this.togglePartyMode());
     }
 
     setMode(mode) {
@@ -202,6 +215,8 @@ class DjwalaApp {
         }
         this.updateNowPlaying();
         this.updateQueue();
+        this.renderTimeline();
+        this.updatePartyView();
         if (this.playerState === 'playing') {
             this.updatePlayerInfo();
         }
@@ -271,6 +286,7 @@ class DjwalaApp {
         this.els.goBtn.disabled = false;
         this.updateNowPlaying();
         this.updateQueue();
+        this.renderTimeline();
         this.showPlayerBar('ready');
     }
 
@@ -378,6 +394,15 @@ class DjwalaApp {
                 this.els.playerRemaining.textContent = `-${this.formatTime(duration - currentTime)}`;
             }
 
+            // Update timeline playhead
+            this.updateTimelinePlayhead(currentTime, duration);
+
+            // Update party mode progress
+            if (this.partyMode && duration > 0) {
+                const pct = (currentTime / duration) * 100;
+                this.els.partyProgressFill.style.width = `${pct}%`;
+            }
+
             // Show crossfade zone when mix command is known
             if (this.mixCommand && duration > 0) {
                 const fadeStartPct = (this.mixCommand.current_fade_start / duration) * 100;
@@ -412,6 +437,8 @@ class DjwalaApp {
         this.els.crossfadeZone.style.display = 'none';
         this.els.crossfadeZone.classList.remove('active');
         this.els.progressFill.style.width = '0%';
+        this.els.timelinePlayhead.classList.remove('active');
+        this.els.partyProgressFill.style.width = '0%';
     }
 
     updateNowPlaying() {
@@ -460,6 +487,132 @@ class DjwalaApp {
             item.appendChild(key);
             this.els.queueList.appendChild(item);
         });
+    }
+
+    renderTimeline() {
+        const container = this.els.timelineTracks;
+        container.innerHTML = '';
+        this.els.mixTimeline.classList.add('active');
+
+        // Color palette for tracks (cycles)
+        const colors = [
+            'rgba(102,126,234,0.35)', // blue
+            'rgba(118,75,162,0.35)',   // purple
+            'rgba(74,222,128,0.35)',   // green
+            'rgba(251,191,36,0.35)',   // amber
+            'rgba(244,114,182,0.35)', // pink
+            'rgba(56,189,248,0.35)',  // sky
+        ];
+
+        // Calculate total duration for proportional widths
+        const totalDuration = this.queue.reduce((sum, t) => sum + (t.duration || 180), 0);
+
+        this.queue.forEach((track, i) => {
+            const dur = track.duration || 180;
+            const widthPct = (dur / totalDuration) * 100;
+
+            const el = document.createElement('div');
+            el.className = 'timeline-track';
+            if (i < this.currentIndex) el.classList.add('past');
+            if (i === this.currentIndex) el.classList.add('current');
+            el.style.width = `${widthPct}%`;
+            el.style.minWidth = '80px';
+            el.style.background = colors[i % colors.length];
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'timeline-track-title';
+            titleEl.textContent = track.title;
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'timeline-track-meta';
+            metaEl.textContent = `${track.bpm} BPM · ${track.camelot}`;
+
+            el.appendChild(titleEl);
+            el.appendChild(metaEl);
+
+            // Add crossfade zone indicator
+            if (track.mix_out_point && track.duration) {
+                const fadeStart = track.mix_out_point;
+                const fadePct = ((track.duration - fadeStart) / track.duration) * 100;
+                if (fadePct > 0 && fadePct < 50) {
+                    const fadeEl = document.createElement('div');
+                    fadeEl.className = 'timeline-crossfade';
+                    fadeEl.style.width = `${fadePct}%`;
+                    el.appendChild(fadeEl);
+                }
+            }
+
+            container.appendChild(el);
+        });
+    }
+
+    updateTimelinePlayhead(currentTime, duration) {
+        const playhead = this.els.timelinePlayhead;
+        const container = this.els.timelineTracks;
+        if (!container.children.length) return;
+
+        // Calculate position: sum of past tracks + current progress within current track
+        let accWidth = 0;
+        for (let i = 0; i < this.currentIndex; i++) {
+            accWidth += container.children[i].offsetWidth;
+        }
+
+        const currentTrackEl = container.children[this.currentIndex];
+        if (currentTrackEl && duration > 0) {
+            const progress = Math.min(currentTime / duration, 1);
+            accWidth += currentTrackEl.offsetWidth * progress;
+        }
+
+        playhead.style.left = `${accWidth}px`;
+        playhead.classList.add('active');
+
+        // Auto-scroll to keep playhead visible
+        const timeline = this.els.mixTimeline;
+        const scrollLeft = timeline.scrollLeft;
+        const viewWidth = timeline.clientWidth;
+        if (accWidth > scrollLeft + viewWidth - 40 || accWidth < scrollLeft) {
+            timeline.scrollLeft = accWidth - viewWidth / 3;
+        }
+    }
+
+    togglePartyMode() {
+        this.partyMode = !this.partyMode;
+        this.els.partyOverlay.classList.toggle('active', this.partyMode);
+
+        if (this.partyMode) {
+            this.updatePartyView();
+            // Hide cursor after inactivity
+            this._partyMouseTimer = null;
+            this.els.partyOverlay.addEventListener('mousemove', this._partyMouseHandler = () => {
+                this.els.partyOverlay.classList.add('show-controls');
+                clearTimeout(this._partyMouseTimer);
+                this._partyMouseTimer = setTimeout(() => {
+                    this.els.partyOverlay.classList.remove('show-controls');
+                }, 3000);
+            });
+            // ESC to exit
+            this._partyEscHandler = (e) => { if (e.key === 'Escape') this.togglePartyMode(); };
+            document.addEventListener('keydown', this._partyEscHandler);
+        } else {
+            this.els.partyOverlay.removeEventListener('mousemove', this._partyMouseHandler);
+            document.removeEventListener('keydown', this._partyEscHandler);
+        }
+    }
+
+    updatePartyView() {
+        if (!this.partyMode) return;
+        const track = this.queue[this.currentIndex];
+        if (!track) return;
+
+        this.els.partyArt.src = `https://img.youtube.com/vi/${track.video_id}/maxresdefault.jpg`;
+        this.els.partyArt.onerror = () => {
+            this.els.partyArt.src = `https://img.youtube.com/vi/${track.video_id}/hqdefault.jpg`;
+        };
+        this.els.partyTitle.textContent = track.title;
+        this.els.partyMeta.textContent = `${track.bpm} BPM · ${track.camelot}`;
+
+        const next = this.queue[this.currentIndex + 1];
+        this.els.partyNext.textContent = next ? `Next: ${next.title}` : '';
     }
 
     setStatus(text, loading = false) {

@@ -25,7 +25,7 @@
     <meta name="theme-color" content="#0a0a0f">
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=11">
+    <link rel="stylesheet" href="/static/css/style.css?v=12">
 </head>
 <body>
     <div class="container">
@@ -63,6 +63,11 @@
             <div class="next-up"></div>
         </div>
 
+        <div class="mix-timeline" id="mixTimeline">
+            <div class="timeline-tracks" id="timelineTracks"></div>
+            <div class="timeline-playhead" id="timelinePlayhead"></div>
+        </div>
+
         <div class="queue">
             <h3>Queue</h3>
             <div class="queue-list"></div>
@@ -92,8 +97,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=11"></script>
-    <script src="/static/js/app.js?v=11"></script>
+    <script src="/static/js/mix-engine.js?v=12"></script>
+    <script src="/static/js/app.js?v=12"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">
@@ -148,6 +153,9 @@
                 <button class="player-btn prev-btn" id="prevBtn" style="display:none">⏮</button>
                 <button class="player-btn play-btn" id="playBtn">▶</button>
                 <button class="player-btn next-btn" id="nextBtn">⏭</button>
+                <button class="player-btn party-btn" id="partyBtn" title="Party Mode">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </button>
             </div>
         </div>
         <div class="player-progress-row">
@@ -157,6 +165,19 @@
                 <div class="player-crossfade-zone" id="playerCrossfadeZone"></div>
             </div>
             <span class="player-time" id="playerRemaining">0:00</span>
+        </div>
+    </div>
+
+    <div class="party-overlay" id="partyOverlay">
+        <div class="party-content">
+            <img class="party-art" id="partyArt" src="" alt="">
+            <div class="party-title" id="partyTitle"></div>
+            <div class="party-meta" id="partyMeta"></div>
+            <div class="party-next" id="partyNext"></div>
+        </div>
+        <button class="party-exit" id="partyExit" title="Exit Party Mode">✕</button>
+        <div class="party-timeline" id="partyTimeline">
+            <div class="party-progress-fill" id="partyProgressFill"></div>
         </div>
     </div>
 

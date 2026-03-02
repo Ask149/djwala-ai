@@ -266,3 +266,64 @@ class TestGenreAwareEstimation:
         track = TrackInfo(video_id="lbl1", title="Normal Song", duration=300.0)
         result = analyzer.estimate(track)
         assert result.mix_in_point >= 8.0, f"mix_in should be >= 8s, got {result.mix_in_point}"
+
+
+class TestMixLengthSlider:
+    """Test that mix_length parameter controls how much of each song plays."""
+
+    def test_short_mix_skips_more(self, analyzer):
+        """slider=0: should skip ~15% intro, fade at ~70%."""
+        track = TrackInfo(video_id="sl0", title="Normal Song", duration=300.0)
+        result = analyzer.estimate(track, mix_length=0)
+        # Short mix: mix_in ~15% of 300 = 45s, but clamped to 25s max
+        assert result.mix_in_point == 25.0, f"Short mix should clamp to 25s, got {result.mix_in_point}"
+        # Short mix: mix_out ~70% of 300 = 210s
+        assert 200.0 <= result.mix_out_point <= 220.0, f"Short mix out should be ~210s, got {result.mix_out_point}"
+
+    def test_full_song_plays_almost_everything(self, analyzer):
+        """slider=100: should skip ~2% intro, fade at ~97%."""
+        track = TrackInfo(video_id="sl100", title="Normal Song", duration=300.0)
+        result = analyzer.estimate(track, mix_length=100)
+        # Full song: mix_in ~2% of 300 = 6s, but clamped to 8s min
+        assert result.mix_in_point == 8.0, f"Full song should clamp to 8s min, got {result.mix_in_point}"
+        # Full song: mix_out ~97% of 300 = 291s
+        assert result.mix_out_point >= 285.0, f"Full song out should be ~291s, got {result.mix_out_point}"
+
+    def test_default_slider_matches_original_behavior(self, analyzer):
+        """slider=50 (default): should be close to original medium energy values."""
+        track = TrackInfo(video_id="sl50", title="Normal Song", duration=300.0)
+        result = analyzer.estimate(track, mix_length=50)
+        # Default: base_in ~8.5%, base_out ~83.5%
+        # For 300s: mix_in ~25.5 (clamped 25), mix_out ~250.5
+        assert 8.0 <= result.mix_in_point <= 25.0
+        assert 240.0 <= result.mix_out_point <= 260.0
+
+    def test_play_time_increases_with_slider(self, analyzer):
+        """Higher slider value = more play time."""
+        track = TrackInfo(video_id="ptime", title="Normal Song", duration=300.0)
+        short = analyzer.estimate(track, mix_length=0)
+        default = analyzer.estimate(track, mix_length=50)
+        full = analyzer.estimate(track, mix_length=100)
+
+        short_play = short.mix_out_point - short.mix_in_point
+        default_play = default.mix_out_point - default.mix_in_point
+        full_play = full.mix_out_point - full.mix_in_point
+
+        assert short_play < default_play < full_play, (
+            f"Play time should increase: short={short_play:.0f}s < default={default_play:.0f}s < full={full_play:.0f}s"
+        )
+
+    def test_slider_with_no_argument_defaults_to_50(self, analyzer):
+        """Calling estimate() without mix_length should behave like slider=50."""
+        track = TrackInfo(video_id="noarg", title="Normal Song", duration=300.0)
+        default = analyzer.estimate(track)
+        explicit = analyzer.estimate(track, mix_length=50)
+        assert default.mix_in_point == explicit.mix_in_point
+        assert default.mix_out_point == explicit.mix_out_point
+
+    def test_minimum_play_time_preserved(self, analyzer):
+        """Even at slider=0, minimum 60s play time should be enforced."""
+        track = TrackInfo(video_id="minpt", title="Short Song", duration=90.0)
+        result = analyzer.estimate(track, mix_length=0)
+        play_time = result.mix_out_point - result.mix_in_point
+        assert play_time >= 60.0, f"Minimum 60s play time, got {play_time}"

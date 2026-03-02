@@ -49,13 +49,20 @@ class AudioAnalyzer:
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 
-    def estimate(self, track: TrackInfo) -> TrackAnalysis:
+    def estimate(self, track: TrackInfo, mix_length: int = 50) -> TrackAnalysis:
         """Return estimated DJ parameters when audio download is unavailable.
         
         Used as fallback when YouTube blocks downloads (e.g., from datacenter IPs).
         Returns genre-aware estimates based on title keywords and artist names,
         with deterministic variation so the DJ brain can still order tracks
         intelligently and plan reasonable crossfades.
+        
+        Args:
+            track: Track metadata (video_id, title, duration).
+            mix_length: Slider value 0-100 controlling how much of each song plays.
+                        0 = short mix (skip more intro, earlier fadeout),
+                        100 = full song (minimal skip, play nearly all).
+                        Default 50 preserves original behavior.
         """
         import hashlib
         
@@ -79,15 +86,24 @@ class AudioAnalyzer:
         # Step 5: Generate shaped energy curve
         energy_curve = self._generate_energy_curve(int(duration), energy_level, track.video_id)
         
-        # Step 6: Calculate smart mix points based on energy level
-        # Bollywood structure: intro 0-15%, verse 15-30%, hook 30-50%, verse 50-70%, outro 75-100%
-        # Higher energy → less intro skip (drops hit faster), more playtime
-        mix_point_config = {
-            "high":   (0.08, 0.85),   # Party/dance: quick intro, play longer
-            "medium": (0.10, 0.82),   # Default: moderate skip
-            "low":    (0.12, 0.78),   # Romantic: longer intro, earlier fadeout
+        # Step 6: Calculate mix points from slider + genre energy
+        # Slider endpoints: short mix (0) skips more, full song (100) plays nearly all
+        SHORT_IN, SHORT_OUT = 0.15, 0.70   # slider=0
+        FULL_IN, FULL_OUT = 0.02, 0.97     # slider=100
+        
+        t = max(0, min(100, mix_length)) / 100.0
+        base_in = SHORT_IN + t * (FULL_IN - SHORT_IN)
+        base_out = SHORT_OUT + t * (FULL_OUT - SHORT_OUT)
+        
+        # Genre energy adjustment: high-energy → skip less intro, play longer
+        energy_adj = {
+            "high":   (-0.02, 0.03),
+            "medium": (0.0, 0.0),
+            "low":    (0.02, -0.03),
         }
-        in_pct, out_pct = mix_point_config.get(energy_level, (0.10, 0.82))
+        in_adj, out_adj = energy_adj.get(energy_level, (0.0, 0.0))
+        in_pct = base_in + in_adj
+        out_pct = base_out + out_adj
         
         mix_in = duration * in_pct
         mix_out = duration * out_pct

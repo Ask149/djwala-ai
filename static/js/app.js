@@ -135,6 +135,66 @@ class WaveformRenderer {
     }
 }
 
+// --- Color Extraction ---
+// Extracts dominant color from YouTube thumbnails via /api/thumb proxy
+
+class ColorExtractor {
+    constructor() {
+        this.cache = {};
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = 10;
+        this.canvas.height = 10;
+        this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    }
+
+    async extract(videoId) {
+        if (this.cache[videoId]) return this.cache[videoId];
+
+        try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            const loaded = new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+
+            img.src = `/api/thumb?v=${videoId}`;
+            await loaded;
+
+            this.ctx.drawImage(img, 0, 0, 10, 10);
+            const data = this.ctx.getImageData(0, 0, 10, 10).data;
+
+            // Find most saturated pixel cluster
+            let bestR = 102, bestG = 126, bestB = 234; // fallback
+            let bestSat = 0;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                const sat = max === 0 ? 0 : (max - min) / max;
+                const brightness = max / 255;
+
+                // Prefer saturated, mid-brightness colors
+                const score = sat * 0.7 + (brightness > 0.2 && brightness < 0.85 ? 0.3 : 0);
+                if (score > bestSat) {
+                    bestSat = score;
+                    bestR = r; bestG = g; bestB = b;
+                }
+            }
+
+            const result = { r: bestR, g: bestG, b: bestB };
+            this.cache[videoId] = result;
+            return result;
+        } catch {
+            const fallback = { r: 102, g: 126, b: 234 };
+            this.cache[videoId] = fallback;
+            return fallback;
+        }
+    }
+}
+
 class DjwalaApp {
     constructor() {
         this.sessionId = null;

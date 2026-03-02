@@ -58,6 +58,7 @@ def _log_task_exception(task: asyncio.Task) -> None:
 class SessionCreate(BaseModel):
     mode: str
     query: str
+    youtube_api_key: str | None = None
 
 
 @app.get("/health")
@@ -84,7 +85,7 @@ async def create_session(request: Request, req: SessionCreate):
     except ValueError:
         raise HTTPException(400, f"Invalid mode: {req.mode}")
 
-    session = manager.create_session(mode, req.query)
+    session = manager.create_session(mode, req.query, youtube_api_key=req.youtube_api_key)
     # Start building queue in background
     task = asyncio.create_task(
         manager.build_queue(session.session_id),

@@ -49,6 +49,33 @@ async def test_create_session(mock_build, client):
 
 
 @patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_with_api_key(mock_build, client):
+    """POST /session accepts optional youtube_api_key."""
+    resp = await client.post("/session", json={
+        "mode": "artists",
+        "query": "Arijit Singh",
+        "youtube_api_key": "test-key-123",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    session = manager.get_session(data["session_id"])
+    assert session.youtube_api_key == "test-key-123"
+
+
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_without_api_key(mock_build, client):
+    """POST /session works without youtube_api_key (backward compat)."""
+    resp = await client.post("/session", json={
+        "mode": "artists",
+        "query": "Arijit Singh",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    session = manager.get_session(data["session_id"])
+    assert session.youtube_api_key is None
+
+
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
 async def test_create_session_invalid_mode(mock_build, client):
     resp = await client.post("/session", json={
         "mode": "invalid_mode",

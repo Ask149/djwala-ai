@@ -107,6 +107,82 @@ class YouTubeSearch:
                     pass
             raise
     
+    def search_song(self, query: str, api_key: str | None = None) -> TrackInfo | None:
+        """Search YouTube for a specific song, return the best match."""
+        try:
+            return self._search_song_ytdlp(query)
+        except Exception:
+            # Try user-provided key
+            if api_key and _API_AVAILABLE:
+                try:
+                    api = YouTubeAPISearch(api_key)
+                    results = api.search(query, max_results=3)
+                    return results[0] if results else None
+                except Exception:
+                    pass
+            # Try server key
+            if self._api_search:
+                try:
+                    results = self._api_search.search(query, max_results=3)
+                    return results[0] if results else None
+                except Exception:
+                    pass
+            return None
+
+    def _search_song_ytdlp(self, query: str) -> TrackInfo | None:
+        """Search for a single song via yt-dlp. Returns first valid result."""
+        ydl_opts = {'quiet': True, 'no_warnings': True, 'extract_flat': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            result = ydl.extract_info(f"ytsearch3:{query}", download=False)
+            for entry in result.get('entries', []):
+                if entry:
+                    track = self._parse_entry(entry)
+                    if track:
+                        return track
+        return None
+
+    def get_mix_playlist(self, video_id: str, api_key: str | None = None) -> list[TrackInfo]:
+        """Get related songs from YouTube Mix playlist (RD{video_id})."""
+        try:
+            return self._get_mix_playlist_ytdlp(video_id)
+        except Exception:
+            # Try API fallback
+            if api_key and _API_AVAILABLE:
+                try:
+                    api = YouTubeAPISearch(api_key)
+                    return api.get_playlist_items(f"RD{video_id}", exclude_id=video_id)
+                except Exception:
+                    pass
+            if self._api_search:
+                try:
+                    return self._api_search.get_playlist_items(f"RD{video_id}", exclude_id=video_id)
+                except Exception:
+                    pass
+            return []  # Graceful degradation
+
+    def _get_mix_playlist_ytdlp(self, video_id: str) -> list[TrackInfo]:
+        """Extract YouTube Mix playlist via yt-dlp."""
+        ydl_opts = {'quiet': True, 'no_warnings': True, 'extract_flat': True}
+        tracks = []
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            url = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
+            result = ydl.extract_info(url, download=False)
+            for entry in result.get('entries', []):
+                if not entry or entry.get('id') == video_id:
+                    continue
+                track = self._parse_entry(entry)
+                if not track and entry.get('id') and entry.get('title'):
+                    # Lenient: accept mix playlist tracks with unknown duration
+                    track = TrackInfo(
+                        video_id=entry['id'],
+                        title=entry['title'],
+                        duration=240.0,
+                        channel=entry.get('channel', '') or entry.get('uploader', ''),
+                    )
+                if track:
+                    tracks.append(track)
+        return tracks
+    
     def _search_with_api(self, queries: list[str], max_results: int) -> list[TrackInfo]:
         """Search using YouTube Data API v3 (server key)."""
         return self._search_with_api_instance(self._api_search, queries, max_results)

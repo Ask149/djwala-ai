@@ -302,3 +302,144 @@ class TestYouTubeAPIPlaylistItems:
         api = YouTubeAPISearch(api_key=None)
         with pytest.raises(ValueError, match="API key required"):
             api.get_playlist_items("RDxyz")
+
+
+class TestSearchSong:
+    """Test search_song() — find a specific song."""
+
+    def test_search_song_returns_top_result(self):
+        yt = YouTubeSearch()
+        mock_result = {
+            'entries': [
+                {'id': 'abc', 'title': 'Tum Hi Ho Full Song', 'duration': 280, 'channel': 'T-Series'},
+            ]
+        }
+        with patch("yt_dlp.YoutubeDL") as MockYDL:
+            mock_ydl = MagicMock()
+            MockYDL.return_value.__enter__ = MagicMock(return_value=mock_ydl)
+            MockYDL.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ydl.extract_info.return_value = mock_result
+
+            track = yt.search_song("Tum Hi Ho")
+
+        assert track is not None
+        assert track.video_id == "abc"
+        assert track.title == "Tum Hi Ho Full Song"
+
+    def test_search_song_returns_none_when_no_results(self):
+        yt = YouTubeSearch()
+        mock_result = {'entries': []}
+        with patch("yt_dlp.YoutubeDL") as MockYDL:
+            mock_ydl = MagicMock()
+            MockYDL.return_value.__enter__ = MagicMock(return_value=mock_ydl)
+            MockYDL.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ydl.extract_info.return_value = mock_result
+
+            track = yt.search_song("nonexistent song xyz123")
+
+        assert track is None
+
+    def test_search_song_skips_compilations(self):
+        yt = YouTubeSearch()
+        mock_result = {
+            'entries': [
+                {'id': 'comp', 'title': 'Non Stop Bollywood Party Mix', 'duration': 500, 'channel': 'DJ'},
+                {'id': 'real', 'title': 'Tum Hi Ho - Arijit Singh', 'duration': 280, 'channel': 'T-Series'},
+            ]
+        }
+        with patch("yt_dlp.YoutubeDL") as MockYDL:
+            mock_ydl = MagicMock()
+            MockYDL.return_value.__enter__ = MagicMock(return_value=mock_ydl)
+            MockYDL.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ydl.extract_info.return_value = mock_result
+
+            track = yt.search_song("Tum Hi Ho")
+
+        assert track is not None
+        assert track.video_id == "real"
+
+    def test_search_song_falls_back_to_api(self):
+        """When yt-dlp fails, search_song uses API fallback."""
+        yt = YouTubeSearch(api_key=None)
+
+        mock_api = MagicMock()
+        mock_api.search.return_value = [
+            TrackInfo(video_id="api1", title="API Song", duration=200.0, channel="Ch"),
+        ]
+
+        with patch("yt_dlp.YoutubeDL", side_effect=Exception("blocked")):
+            with patch("djwala.youtube.YouTubeAPISearch", return_value=mock_api):
+                track = yt.search_song("some song", api_key="user-key")
+
+        assert track is not None
+        assert track.video_id == "api1"
+
+
+class TestGetMixPlaylist:
+    """Test get_mix_playlist() — extract YouTube Mix playlist."""
+
+    def test_get_mix_playlist_returns_related_tracks(self):
+        yt = YouTubeSearch()
+        mock_result = {
+            'entries': [
+                {'id': 'seed1', 'title': 'Seed Song', 'duration': 280, 'channel': 'Ch'},
+                {'id': 'rel1', 'title': 'Related 1', 'duration': 240, 'channel': 'Ch'},
+                {'id': 'rel2', 'title': 'Related 2', 'duration': 200, 'channel': 'Ch'},
+            ]
+        }
+        with patch("yt_dlp.YoutubeDL") as MockYDL:
+            mock_ydl = MagicMock()
+            MockYDL.return_value.__enter__ = MagicMock(return_value=mock_ydl)
+            MockYDL.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ydl.extract_info.return_value = mock_result
+
+            tracks = yt.get_mix_playlist("seed1")
+
+        assert len(tracks) == 2
+        assert tracks[0].video_id == "rel1"
+        assert tracks[1].video_id == "rel2"
+
+    def test_get_mix_playlist_excludes_seed(self):
+        yt = YouTubeSearch()
+        mock_result = {
+            'entries': [
+                {'id': 'seed1', 'title': 'Seed', 'duration': 280, 'channel': 'Ch'},
+            ]
+        }
+        with patch("yt_dlp.YoutubeDL") as MockYDL:
+            mock_ydl = MagicMock()
+            MockYDL.return_value.__enter__ = MagicMock(return_value=mock_ydl)
+            MockYDL.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ydl.extract_info.return_value = mock_result
+
+            tracks = yt.get_mix_playlist("seed1")
+
+        assert len(tracks) == 0
+
+    def test_get_mix_playlist_lenient_on_missing_duration(self):
+        """Mix playlist entries without duration get a 240s default."""
+        yt = YouTubeSearch()
+        mock_result = {
+            'entries': [
+                {'id': 'nodur', 'title': 'No Duration Track', 'channel': 'Ch'},
+            ]
+        }
+        with patch("yt_dlp.YoutubeDL") as MockYDL:
+            mock_ydl = MagicMock()
+            MockYDL.return_value.__enter__ = MagicMock(return_value=mock_ydl)
+            MockYDL.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ydl.extract_info.return_value = mock_result
+
+            tracks = yt.get_mix_playlist("seed1")
+
+        assert len(tracks) == 1
+        assert tracks[0].duration == 240.0
+
+    def test_get_mix_playlist_returns_empty_on_failure(self):
+        """get_mix_playlist returns [] on total failure (graceful degradation)."""
+        yt = YouTubeSearch(api_key=None)
+
+        with patch("yt_dlp.YoutubeDL", side_effect=Exception("blocked")):
+            tracks = yt.get_mix_playlist("seed1")
+
+        assert tracks == []

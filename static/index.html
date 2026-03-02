@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DjwalaAI</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=6">
+    <link rel="stylesheet" href="/static/css/style.css?v=7">
 </head>
 <body>
     <div class="container">
@@ -41,8 +41,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=6"></script>
-    <script src="/static/js/app.js?v=6"></script>
+    <script src="/static/js/mix-engine.js?v=7"></script>
+    <script src="/static/js/app.js?v=7"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">
@@ -60,6 +60,16 @@
                 <div class="settings-actions">
                     <button class="settings-save" onclick="app.saveApiKey()">Save</button>
                     <button class="settings-clear" onclick="app.clearApiKey()">Clear</button>
+                </div>
+
+                <hr class="settings-divider">
+
+                <label class="settings-label">Mix Length</label>
+                <div class="slider-row">
+                    <span class="slider-end">Short Mix</span>
+                    <input type="range" class="mix-slider" id="mixLengthSlider"
+                           min="0" max="100" value="50" step="5">
+                    <span class="slider-end">Full Song</span>
                 </div>
 
                 <details class="api-key-guide">

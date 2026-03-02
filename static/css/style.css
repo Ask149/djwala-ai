@@ -322,6 +322,57 @@ h1 {
     border: 1px solid #333;
 }
 
+/* Settings divider */
+.settings-divider {
+    border: none;
+    border-top: 1px solid #333;
+    margin: 1rem 0;
+}
+
+/* Mix length slider */
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.slider-end {
+    color: #666;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.mix-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    outline: none;
+}
+
+.mix-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    cursor: pointer;
+}
+
+.mix-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    cursor: pointer;
+    border: none;
+}
+
 .api-key-guide {
     color: #666;
     font-size: 0.8rem;

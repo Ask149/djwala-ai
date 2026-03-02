@@ -27,10 +27,12 @@ class DjwalaApp {
             settingsOverlay: document.getElementById('settingsOverlay'),
             apiKeyInput: document.getElementById('apiKeyInput'),
             keyStatus: document.getElementById('keyStatus'),
+            mixLengthSlider: document.getElementById('mixLengthSlider'),
         };
 
         this.mode = 'artists';
         this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
+        this.mixLength = parseInt(localStorage.getItem('djwala_mix_length') || '50', 10);
         this.bindEvents();
         this.engine.init();
         this.updateKeyStatus();
@@ -40,6 +42,10 @@ class DjwalaApp {
         this.els.goBtn.addEventListener('click', () => this.startSession());
         this.els.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') this.startSession();
+        });
+        this.els.mixLengthSlider.addEventListener('input', (e) => {
+            this.mixLength = parseInt(e.target.value, 10);
+            localStorage.setItem('djwala_mix_length', String(this.mixLength));
         });
     }
 
@@ -70,6 +76,7 @@ class DjwalaApp {
         try {
             const body = { mode: this.mode, query };
             if (this.apiKey) body.youtube_api_key = this.apiKey;
+            body.mix_length = this.mixLength;
 
             const resp = await fetch('/session', {
                 method: 'POST',
@@ -301,6 +308,7 @@ class DjwalaApp {
         if (this.apiKey) {
             this.els.apiKeyInput.value = this.apiKey;
         }
+        this.els.mixLengthSlider.value = this.mixLength;
     }
 
     closeSettings() {

@@ -285,6 +285,21 @@ async def test_create_session_song_mode(mock_build, client):
     assert session.mode.value == "song"
 
 
+@patch.object(manager, "build_queue", new_callable=AsyncMock)
+async def test_create_session_mood(mock_build, client):
+    """POST /session accepts mode=mood."""
+    resp = await client.post("/session", json={
+        "mode": "mood",
+        "query": "house-party",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "session_id" in data
+    session = manager.get_session(data["session_id"])
+    assert session.mode == InputMode.MOOD
+    assert session.query == "house-party"
+
+
 async def test_analytics_endpoint(client):
     """POST /analytics accepts events and returns 204."""
     resp = await client.post("/analytics", json={

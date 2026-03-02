@@ -39,6 +39,18 @@ _DESI_HINTS = {
     "anirudh", "ar rahman", "a.r. rahman",
 }
 
+# Mood preset search queries — each mood maps to YouTube search terms
+MOOD_PRESETS = {
+    "house-party": ["house party hits", "club bangers 2024"],
+    "road-trip": ["road trip songs", "driving music hits"],
+    "late-night": ["late night r&b", "midnight vibes"],
+    "chill-vibes": ["chill lofi beats", "relaxing music"],
+    "workout": ["workout music", "gym motivation songs"],
+    "bollywood": ["bollywood party songs", "hindi hits"],
+    "hip-hop": ["hip hop hits 2024", "rap bangers"],
+    "latin": ["reggaeton hits", "latin party music"],
+}
+
 # Min/max duration for a single track (seconds)
 MIN_DURATION = 60
 MAX_DURATION = 600
@@ -74,7 +86,12 @@ class YouTubeSearch:
         return _QUERY_SUFFIXES_DEFAULT
 
     def build_queries(self, mode: InputMode, query: str) -> list[str]:
-        """Build search queries for artist-based input."""
+        """Build search queries based on mode and input."""
+        if mode == InputMode.MOOD:
+            preset = MOOD_PRESETS.get(query)
+            if preset:
+                return list(preset)
+            return [query]  # fallback: use raw query
         artists = [a.strip() for a in query.split(",") if a.strip()]
         suffixes = self._get_suffixes(query)
         queries = []

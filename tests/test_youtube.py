@@ -17,6 +17,24 @@ class TestQueryBuilding:
         assert any("rufus du sol" in q.lower() for q in queries)
         assert any("bob moses" in q.lower() for q in queries)
 
+    def test_mood_queries_house_party(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.MOOD, "house-party")
+        assert queries == ["house party hits", "club bangers 2024"]
+
+    def test_mood_queries_all_presets_exist(self):
+        from djwala.youtube import MOOD_PRESETS
+        assert len(MOOD_PRESETS) == 8
+        for key, queries in MOOD_PRESETS.items():
+            assert isinstance(queries, list)
+            assert len(queries) >= 1
+            assert all(isinstance(q, str) for q in queries)
+
+    def test_mood_queries_unknown_fallback(self):
+        yt = YouTubeSearch()
+        queries = yt.build_queries(InputMode.MOOD, "unknown-mood")
+        assert queries == ["unknown-mood"]
+
 
 class TestResultParsing:
     """Test that yt-dlp results are parsed into TrackInfo."""

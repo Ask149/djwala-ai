@@ -9,6 +9,7 @@ from enum import Enum
 class InputMode(str, Enum):
     ARTISTS = "artists"
     SONG = "song"
+    MOOD = "mood"
 
 
 @dataclass

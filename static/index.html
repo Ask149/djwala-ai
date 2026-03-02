@@ -25,7 +25,7 @@
     <meta name="theme-color" content="#0a0a0f">
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=12">
+    <link rel="stylesheet" href="/static/css/style.css?v=14">
 </head>
 <body>
     <div class="container">
@@ -49,6 +49,20 @@
                 </button>
             </div>
             <div class="artist-chips"></div>
+        </div>
+
+        <div class="mood-grid" id="moodGrid">
+            <p class="mood-heading">Or pick a vibe</p>
+            <div class="mood-pills">
+                <button class="mood-pill" data-mood="house-party">🎉 House Party</button>
+                <button class="mood-pill" data-mood="road-trip">🚗 Road Trip</button>
+                <button class="mood-pill" data-mood="late-night">🌙 Late Night</button>
+                <button class="mood-pill" data-mood="chill-vibes">☕ Chill Vibes</button>
+                <button class="mood-pill" data-mood="workout">💪 Workout</button>
+                <button class="mood-pill" data-mood="bollywood">🎵 Bollywood Hits</button>
+                <button class="mood-pill" data-mood="hip-hop">🔥 Hip Hop</button>
+                <button class="mood-pill" data-mood="latin">💃 Latin</button>
+            </div>
         </div>
 
         <div class="status-bar">
@@ -97,8 +111,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=12"></script>
-    <script src="/static/js/app.js?v=12"></script>
+    <script src="/static/js/mix-engine.js?v=14"></script>
+    <script src="/static/js/app.js?v=14"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">
@@ -156,6 +170,9 @@
                 <button class="player-btn party-btn" id="partyBtn" title="Party Mode">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                 </button>
+                <button class="player-btn lyrics-btn" id="lyricsBtn" title="Find Lyrics">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+                </button>
             </div>
         </div>
         <div class="player-progress-row">
@@ -168,12 +185,23 @@
         </div>
     </div>
 
+    <div class="lyrics-panel" id="lyricsPanel">
+        <div class="lyrics-panel-header">
+            <span class="lyrics-panel-title">Lyrics</span>
+            <button class="lyrics-panel-close" id="lyricsPanelClose">✕</button>
+        </div>
+        <div class="lyrics-panel-body" id="lyricsPanelBody">
+            <div class="lyrics-loading">Searching for lyrics...</div>
+        </div>
+    </div>
+
     <div class="party-overlay" id="partyOverlay">
         <div class="party-content">
             <img class="party-art" id="partyArt" src="" alt="">
             <div class="party-title" id="partyTitle"></div>
             <div class="party-meta" id="partyMeta"></div>
             <div class="party-next" id="partyNext"></div>
+            <div class="party-lyrics" id="partyLyrics"></div>
         </div>
         <button class="party-exit" id="partyExit" title="Exit Party Mode">✕</button>
         <div class="party-timeline" id="partyTimeline">

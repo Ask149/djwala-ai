@@ -53,13 +53,26 @@ class DjwalaApp {
             partyNext: document.getElementById('partyNext'),
             partyExit: document.getElementById('partyExit'),
             partyProgressFill: document.getElementById('partyProgressFill'),
+            moodGrid: document.getElementById('moodGrid'),
+            moodPills: document.querySelectorAll('.mood-pill'),
+            lyricsBtn: document.getElementById('lyricsBtn'),
+            lyricsPanel: document.getElementById('lyricsPanel'),
+            lyricsPanelBody: document.getElementById('lyricsPanelBody'),
+            lyricsPanelClose: document.getElementById('lyricsPanelClose'),
+            partyLyrics: document.getElementById('partyLyrics'),
         };
 
         this.mode = 'artists';
+        this.moodId = null;
+        this.lyricsData = null;      // parsed synced lyrics array [{time, text}]
+        this.lyricsTrackId = null;    // video_id lyrics were fetched for
+        this.lyricsVisible = false;
+        this.currentLyricIndex = -1;
         this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
         this.mixLength = parseInt(localStorage.getItem('djwala_mix_length') || '50', 10);
         this.bindEvents();
         this.engine.init();
+        this.initKeyboardShortcuts();
         this.updateKeyStatus();
         this.loadFromURLParams();
         this.trackEvent('page_view', { referrer: document.referrer || null });
@@ -92,6 +105,11 @@ class DjwalaApp {
         this.els.nextBtn.addEventListener('click', () => this.onSkipTap());
         this.els.partyBtn.addEventListener('click', () => this.togglePartyMode());
         this.els.partyExit.addEventListener('click', () => this.togglePartyMode());
+        this.els.moodPills.forEach(pill => {
+            pill.addEventListener('click', () => this.startMoodSession(pill.dataset.mood, pill.textContent.trim()));
+        });
+        this.els.lyricsBtn.addEventListener('click', () => this.openLyrics());
+        this.els.lyricsPanelClose.addEventListener('click', () => this.closeLyrics());
     }
 
     setMode(mode) {
@@ -104,6 +122,15 @@ class DjwalaApp {
         } else {
             this.els.searchInput.placeholder = 'Artist names, comma separated... (e.g., "Arijit Singh, Pritam, AP Dhillon")';
         }
+    }
+
+    startMoodSession(moodId, label) {
+        this.mode = 'mood';
+        this.moodId = moodId;
+        this.els.searchInput.value = label;
+        this.els.moodGrid.classList.add('hidden');
+        this.trackEvent('mood_start', { mood: moodId });
+        this.startSession();
     }
 
     parseArtists(query) {
@@ -128,20 +155,24 @@ class DjwalaApp {
             const artists = this.parseArtists(query);
             this.showArtistChips(artists);
         } else {
-            this.showArtistChips([query]);  // Show song name as single chip
+            this.showArtistChips([query]);  // Show song/mood name as single chip
         }
 
         this.els.goBtn.disabled = true;
         this.setStatus('Searching YouTube...', true);
 
-        // Hide how-it-works when session starts
+        // Hide how-it-works and mood grid when session starts
         const hiw = document.getElementById('howItWorks');
         if (hiw) hiw.classList.add('hidden');
+        this.els.moodGrid.classList.add('hidden');
 
         this.trackEvent('mix_start', { mode: this.mode, query });
 
         try {
-            const body = { mode: this.mode, query };
+            const body = {
+                mode: this.mode,
+                query: this.mode === 'mood' ? this.moodId : query,
+            };
             if (this.apiKey) body.youtube_api_key = this.apiKey;
             body.mix_length = this.mixLength;
 
@@ -217,8 +248,13 @@ class DjwalaApp {
         this.updateQueue();
         this.renderTimeline();
         this.updatePartyView();
+        this.updatePageTitle();
         if (this.playerState === 'playing') {
             this.updatePlayerInfo();
+        }
+        // Refresh lyrics if panel is open and track changed
+        if (this.lyricsVisible) {
+            this.fetchAndShowLyrics();
         }
     }
 
@@ -287,6 +323,7 @@ class DjwalaApp {
         this.updateNowPlaying();
         this.updateQueue();
         this.renderTimeline();
+        this.updatePageTitle();
         this.showPlayerBar('ready');
     }
 
@@ -425,6 +462,9 @@ class DjwalaApp {
 
             // Update crossfade zone pulse
             this.els.crossfadeZone.classList.toggle('active', this.engine.isFading);
+
+            // Sync lyrics with current playback position
+            this.syncLyrics(currentTime);
         }, 500);
     }
 
@@ -439,6 +479,11 @@ class DjwalaApp {
         this.els.progressFill.style.width = '0%';
         this.els.timelinePlayhead.classList.remove('active');
         this.els.partyProgressFill.style.width = '0%';
+        this.updatePageTitle();
+        // Refresh lyrics for new track if panel is open
+        if (this.lyricsVisible) {
+            this.fetchAndShowLyrics();
+        }
     }
 
     updateNowPlaying() {
@@ -690,6 +735,17 @@ class DjwalaApp {
 
     loadFromURLParams() {
         const params = new URLSearchParams(window.location.search);
+
+        // Check for mood URL first
+        const mood = params.get('mood');
+        if (mood) {
+            const pill = document.querySelector(`.mood-pill[data-mood="${mood}"]`);
+            const label = pill ? pill.textContent.trim() : mood;
+            window.history.replaceState({}, '', window.location.pathname);
+            this.startMoodSession(mood, label);
+            return;
+        }
+
         const mode = params.get('mode');
         const query = params.get('q');
 
@@ -718,8 +774,12 @@ class DjwalaApp {
         }
 
         const url = new URL(window.location.origin);
-        url.searchParams.set('mode', this.mode);
-        url.searchParams.set('q', query);
+        if (this.mode === 'mood') {
+            url.searchParams.set('mood', this.moodId);
+        } else {
+            url.searchParams.set('mode', this.mode);
+            url.searchParams.set('q', query);
+        }
 
         const shareURL = url.toString();
 
@@ -729,7 +789,9 @@ class DjwalaApp {
         if (navigator.share) {
             navigator.share({
                 title: 'DjwalaAI Mix',
-                text: this.mode === 'song'
+                text: this.mode === 'mood'
+                    ? `Listen to a ${query} DJ mix`
+                    : this.mode === 'song'
                     ? `Listen to a DJ mix starting with "${query}"`
                     : `Listen to a DJ mix of ${query}`,
                 url: shareURL,
@@ -779,6 +841,217 @@ class DjwalaApp {
             tooltip.remove();
             this.els.shareBtn.classList.remove('copied');
         }, 2000);
+    }
+
+    // --- Lyrics ---
+
+    cleanTrackTitle(title) {
+        return title
+            .replace(/\(official\s*(music\s*)?video\)/gi, '')
+            .replace(/\(lyric(al)?\s*video\)/gi, '')
+            .replace(/\(official\s*audio\)/gi, '')
+            .replace(/\(audio\)/gi, '')
+            .replace(/\[.*?\]/g, '')
+            .replace(/\s*ft\.?\s*/gi, ' ')
+            .replace(/\s*feat\.?\s*/gi, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+    }
+
+    openLyrics() {
+        if (this.lyricsVisible) {
+            this.closeLyrics();
+            return;
+        }
+        this.lyricsVisible = true;
+        this.els.lyricsPanel.classList.add('active');
+        this.fetchAndShowLyrics();
+        this.trackEvent('lyrics_open', { title: this.queue[this.currentIndex]?.title });
+    }
+
+    closeLyrics() {
+        this.lyricsVisible = false;
+        this.els.lyricsPanel.classList.remove('active');
+    }
+
+    async fetchAndShowLyrics() {
+        const track = this.queue[this.currentIndex];
+        if (!track) return;
+
+        // Don't re-fetch if already loaded for this track
+        if (this.lyricsTrackId === track.video_id && this.lyricsData !== null) {
+            return;
+        }
+
+        this.lyricsData = null;
+        this.lyricsTrackId = track.video_id;
+        this.currentLyricIndex = -1;
+        this.els.lyricsPanelBody.innerHTML = '<div class="lyrics-loading">Searching for lyrics...</div>';
+        this.els.partyLyrics.textContent = '';
+
+        const clean = this.cleanTrackTitle(track.title);
+
+        try {
+            const resp = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(clean)}`);
+            if (!resp.ok) throw new Error('LRCLIB search failed');
+            const results = await resp.json();
+
+            if (!results || results.length === 0) {
+                this.showLyricsNotFound(clean);
+                return;
+            }
+
+            // Pick best result — prefer one with synced lyrics
+            const best = results.find(r => r.syncedLyrics) || results[0];
+
+            if (best.syncedLyrics) {
+                this.lyricsData = this.parseLRC(best.syncedLyrics);
+                this.renderSyncedLyrics();
+            } else if (best.plainLyrics) {
+                this.lyricsData = null; // no synced data
+                this.renderPlainLyrics(best.plainLyrics);
+            } else {
+                this.showLyricsNotFound(clean);
+            }
+        } catch (err) {
+            console.warn('[DjwalaAI] Lyrics fetch error:', err);
+            this.showLyricsNotFound(clean);
+        }
+    }
+
+    parseLRC(lrcText) {
+        const lines = [];
+        const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)/;
+
+        for (const line of lrcText.split('\n')) {
+            const match = line.match(regex);
+            if (match) {
+                const mins = parseInt(match[1], 10);
+                const secs = parseInt(match[2], 10);
+                const ms = parseInt(match[3].padEnd(3, '0'), 10);
+                const time = mins * 60 + secs + ms / 1000;
+                const text = match[4].trim();
+                lines.push({ time, text });
+            }
+        }
+
+        return lines.sort((a, b) => a.time - b.time);
+    }
+
+    renderSyncedLyrics() {
+        const body = this.els.lyricsPanelBody;
+        body.innerHTML = '';
+
+        this.lyricsData.forEach((line, i) => {
+            const el = document.createElement('div');
+            el.className = 'lyrics-line';
+            if (!line.text) {
+                el.classList.add('instrumental');
+                el.textContent = '♪';
+            } else {
+                el.textContent = line.text;
+            }
+            el.dataset.index = i;
+            body.appendChild(el);
+        });
+    }
+
+    renderPlainLyrics(text) {
+        const body = this.els.lyricsPanelBody;
+        body.innerHTML = '';
+        const el = document.createElement('div');
+        el.className = 'lyrics-plain';
+        el.textContent = text;
+        body.appendChild(el);
+    }
+
+    showLyricsNotFound(cleanTitle) {
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(cleanTitle + ' lyrics')}`;
+        this.els.lyricsPanelBody.innerHTML = `
+            <div class="lyrics-not-found">
+                <p>No lyrics found for this track.</p>
+                <a href="${searchUrl}" target="_blank">Search Google for lyrics →</a>
+            </div>
+        `;
+        this.els.partyLyrics.textContent = '';
+    }
+
+    syncLyrics(currentTime) {
+        if (!this.lyricsData || this.lyricsData.length === 0) return;
+
+        // Find the current lyric line based on playback time
+        let activeIndex = -1;
+        for (let i = this.lyricsData.length - 1; i >= 0; i--) {
+            if (currentTime >= this.lyricsData[i].time) {
+                activeIndex = i;
+                break;
+            }
+        }
+
+        if (activeIndex === this.currentLyricIndex) return;
+        this.currentLyricIndex = activeIndex;
+
+        // Update panel lyrics
+        if (this.lyricsVisible) {
+            const lines = this.els.lyricsPanelBody.querySelectorAll('.lyrics-line');
+            lines.forEach((el, i) => {
+                el.classList.toggle('active', i === activeIndex);
+                el.classList.toggle('past', i < activeIndex);
+            });
+
+            // Auto-scroll to active line
+            const activeLine = this.els.lyricsPanelBody.querySelector('.lyrics-line.active');
+            if (activeLine) {
+                activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // Update party mode lyrics
+        if (this.partyMode && activeIndex >= 0) {
+            const line = this.lyricsData[activeIndex];
+            this.els.partyLyrics.textContent = line.text || '♪';
+        }
+    }
+
+    // --- Keyboard Shortcuts ---
+
+    initKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts when typing in input fields
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            // Don't interfere with party mode ESC handler
+            if (this.partyMode && e.key === 'Escape') return;
+
+            switch (e.key) {
+                case ' ':
+                    e.preventDefault();
+                    this.onPlayTap();
+                    break;
+                case 'n':
+                case 'N':
+                    this.onSkipTap();
+                    break;
+                case 'p':
+                case 'P':
+                    this.togglePartyMode();
+                    break;
+                case 'l':
+                case 'L':
+                    this.openLyrics();
+                    break;
+            }
+        });
+    }
+
+    // --- Dynamic Page Title ---
+
+    updatePageTitle() {
+        const track = this.queue[this.currentIndex];
+        if (track) {
+            document.title = `▶ ${track.title} — DjwalaAI`;
+        } else {
+            document.title = 'DjwalaAI — AI-Powered Auto-DJ | Free Seamless Music Mixes';
+        }
     }
 }
 

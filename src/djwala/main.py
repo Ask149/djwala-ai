@@ -261,6 +261,27 @@ def lyrics_proxy(q: str = Query(default=None)):
         raise HTTPException(502, "Lyrics service unavailable")
 
 
+# --- Thumbnail Proxy (CORS bypass for color extraction) ---
+
+@app.get("/api/thumb")
+def thumb_proxy(v: str = Query(default=None)):
+    """Proxy YouTube thumbnail to allow canvas color extraction (CORS)."""
+    if not v:
+        raise HTTPException(400, "Missing query parameter 'v'")
+    url = f"https://img.youtube.com/vi/{v}/mqdefault.jpg"
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        from fastapi.responses import Response
+        return Response(
+            content=resp.content,
+            media_type=resp.headers.get("content-type", "image/jpeg"),
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception:
+        raise HTTPException(502, "Thumbnail fetch failed")
+
+
 # --- Analytics ---
 
 ANALYTICS_FILE = Path(os.getenv("DJWALA_ANALYTICS_FILE", "/tmp/djwala_analytics.jsonl"))

@@ -393,3 +393,12 @@ async def test_lyrics_proxy_dns_fallback(mock_get, mock_direct, client):
     assert len(data) == 1
     assert data[0]["trackName"] == "Shape of You"
     mock_direct.assert_called_once_with("Shape of You")
+
+
+# --- Thumbnail Proxy ---
+
+
+async def test_thumb_proxy_missing_param(client):
+    """Thumbnail proxy requires 'v' query param."""
+    resp = await client.get("/api/thumb")
+    assert resp.status_code == 400

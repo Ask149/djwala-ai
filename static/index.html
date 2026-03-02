@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DjwalaAI</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=7">
+    <link rel="stylesheet" href="/static/css/style.css?v=9">
 </head>
 <body>
     <div class="container">
@@ -41,8 +41,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=7"></script>
-    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/mix-engine.js?v=9"></script>
+    <script src="/static/js/app.js?v=9"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">
@@ -83,6 +83,29 @@
                     <p>Free tier: 10,000 requests/day — plenty for personal DJ sessions.</p>
                 </details>
             </div>
+        </div>
+    </div>
+
+    <div class="player-bar" id="playerBar">
+        <div class="player-bar-inner">
+            <img class="player-thumb" id="playerThumb" src="" alt="">
+            <div class="player-info">
+                <div class="player-title" id="playerTitle"></div>
+                <div class="player-meta" id="playerMeta"></div>
+            </div>
+            <div class="player-controls">
+                <button class="player-btn prev-btn" id="prevBtn" style="display:none">⏮</button>
+                <button class="player-btn play-btn" id="playBtn">▶</button>
+                <button class="player-btn next-btn" id="nextBtn">⏭</button>
+            </div>
+        </div>
+        <div class="player-progress-row">
+            <span class="player-time" id="playerElapsed">0:00</span>
+            <div class="player-progress" id="playerProgress">
+                <div class="player-progress-fill" id="playerProgressFill"></div>
+                <div class="player-crossfade-zone" id="playerCrossfadeZone"></div>
+            </div>
+            <span class="player-time" id="playerRemaining">0:00</span>
         </div>
     </div>
 

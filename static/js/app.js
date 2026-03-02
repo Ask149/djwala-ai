@@ -266,6 +266,8 @@ class DjwalaApp {
             waveformLeft: document.getElementById('waveformLeft'),
             waveformRight: document.getElementById('waveformRight'),
             deckProgressFill: document.getElementById('deckProgressFill'),
+            partyWaveformLeft: document.getElementById('partyWaveformLeft'),
+            partyWaveformRight: document.getElementById('partyWaveformRight'),
         };
 
         this.mode = 'artists';
@@ -281,6 +283,8 @@ class DjwalaApp {
         this.colorExtractor = new ColorExtractor();
         this.deckActive = false;
         this.deckFading = false;
+        this.partyWaveformL = new WaveformRenderer(document.getElementById('partyWaveformLeft'));
+        this.partyWaveformR = new WaveformRenderer(document.getElementById('partyWaveformRight'));
         this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
         this.mixLength = parseInt(localStorage.getItem('djwala_mix_length') || '50', 10);
         this.bindEvents();
@@ -625,6 +629,15 @@ class DjwalaApp {
         this.els.deckArtLeft.style.setProperty('--deck-color', `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)`);
         document.body.style.setProperty('--bg-glow', `rgba(${color.r}, ${color.g}, ${color.b}, 0.1)`);
 
+        // Mirror to party waveforms
+        this.partyWaveformL.generate(track);
+        if (nextTrack) this.partyWaveformR.generate(nextTrack);
+        this.partyWaveformL.setColor(color.r, color.g, color.b);
+        if (this.partyMode) {
+            this.partyWaveformL.startAnimation();
+            this.partyWaveformR.startAnimation();
+        }
+
         // Crossfader to left
         this.els.crossfaderKnob.style.left = '0%';
     }
@@ -769,6 +782,11 @@ class DjwalaApp {
             if (this.partyMode && duration > 0) {
                 const pct = (currentTime / duration) * 100;
                 this.els.partyProgressFill.style.width = `${pct}%`;
+
+                // Update party waveforms
+                if (this.deckActive) {
+                    this.partyWaveformL.setPlayhead(currentTime / duration);
+                }
             }
 
             // Show crossfade zone when mix command is known
@@ -1008,6 +1026,15 @@ class DjwalaApp {
             this.els.partyOverlay.removeEventListener('mousemove', this._partyMouseHandler);
             document.removeEventListener('keydown', this._partyEscHandler);
         }
+
+        // Start/stop party waveform animations
+        if (this.partyMode && this.deckActive) {
+            this.partyWaveformL.startAnimation();
+            this.partyWaveformR.startAnimation();
+        } else {
+            this.partyWaveformL.stopAnimation();
+            this.partyWaveformR.stopAnimation();
+        }
     }
 
     updatePartyView() {
@@ -1024,6 +1051,14 @@ class DjwalaApp {
 
         const next = this.queue[this.currentIndex + 1];
         this.els.partyNext.textContent = next ? `Next: ${next.title}` : '';
+
+        // Dynamic party background
+        if (this.deckActive) {
+            const color = this.colorExtractor.cache[track.video_id];
+            if (color) {
+                this.els.partyOverlay.style.background = `radial-gradient(ellipse at 50% 40%, rgba(${color.r}, ${color.g}, ${color.b}, 0.2) 0%, #000 60%)`;
+            }
+        }
     }
 
     setStatus(text, loading = false) {

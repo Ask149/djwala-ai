@@ -1336,3 +1336,20 @@ body.deck-active {
         height: 40px;
     }
 }
+
+/* Party mode waveforms */
+.party-waveforms {
+    width: 90vw;
+    max-width: 900px;
+    margin-top: 1.5rem;
+}
+
+.party-waveforms .waveform-canvas {
+    height: 64px;
+}
+
+@media (max-width: 480px) {
+    .party-waveforms .waveform-canvas {
+        height: 40px;
+    }
+}

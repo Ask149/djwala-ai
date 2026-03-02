@@ -85,44 +85,56 @@ class YouTubeSearch:
         return queries
 
     def search(
-        self, mode: InputMode, query: str, max_results: int = 20
+        self, mode: InputMode, query: str, max_results: int = 20, api_key: str | None = None,
     ) -> list[TrackInfo]:
         """Search YouTube and return candidate tracks."""
         queries = self.build_queries(mode, query)
         try:
             return self._search_with_ytdlp(queries, query, max_results)
         except Exception as e:
+            # Try user-provided key first
+            if api_key and _API_AVAILABLE:
+                try:
+                    api_search = YouTubeAPISearch(api_key)
+                    return self._search_with_api_instance(api_search, queries, max_results)
+                except Exception:
+                    pass
+            # Then try server key
             if self._api_search:
                 try:
-                    return self._search_with_api(queries, max_results)
+                    return self._search_with_api_instance(self._api_search, queries, max_results)
                 except Exception:
-                    raise e
+                    pass
             raise
     
     def _search_with_api(self, queries: list[str], max_results: int) -> list[TrackInfo]:
-        """Search using YouTube Data API v3 (more reliable, requires API key)."""
+        """Search using YouTube Data API v3 (server key)."""
+        return self._search_with_api_instance(self._api_search, queries, max_results)
+
+    def _search_with_api_instance(self, api_search, queries: list[str], max_results: int) -> list[TrackInfo]:
+        """Search using a specific YouTubeAPISearch instance."""
         seen_ids: set[str] = set()
         tracks: list[TrackInfo] = []
-        
+
         per_query = max(5, max_results // len(queries))
-        
+
         for q in queries:
             if len(tracks) >= max_results:
                 break
-            
+
             try:
-                results = self._api_search.search(q, max_results=per_query)
+                results = api_search.search(q, max_results=per_query)
                 for track in results:
                     if track.video_id in seen_ids:
                         continue
                     seen_ids.add(track.video_id)
-                    
+
                     # Skip compilations
                     if not self._is_compilation(track.title):
                         tracks.append(track)
             except Exception:
                 continue
-        
+
         return tracks[:max_results]
     
     def _search_with_ytdlp(

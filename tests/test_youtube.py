@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from djwala.youtube import YouTubeSearch
-from djwala.models import InputMode
+from djwala.models import InputMode, TrackInfo
 
 
 class TestQueryBuilding:
@@ -213,3 +213,24 @@ class TestMultiArtistDistribution:
         yt = YouTubeSearch()
         queries = yt.build_queries(InputMode.ARTISTS, ",,,")
         assert queries == []
+
+
+class TestSearchApiKeyFallback:
+    """Test that search() uses override api_key when yt-dlp fails."""
+
+    def test_search_uses_override_api_key_on_ytdlp_failure(self):
+        """When yt-dlp fails, search should use the override api_key if provided."""
+        yt = YouTubeSearch(api_key=None)  # no server key
+
+        mock_api_search = MagicMock()
+        mock_api_search.search.return_value = [
+            TrackInfo(video_id="abc", title="Test Song", duration=200.0, channel="Ch"),
+        ]
+
+        with patch("djwala.youtube.YouTubeAPISearch", return_value=mock_api_search) as mock_cls:
+            with patch.object(yt, "_search_with_ytdlp", side_effect=Exception("blocked")):
+                results = yt.search(InputMode.ARTISTS, "test artist", api_key="user-key-123")
+
+        mock_cls.assert_called_once_with("user-key-123")
+        assert len(results) == 1
+        assert results[0].video_id == "abc"

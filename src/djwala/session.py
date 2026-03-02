@@ -77,7 +77,10 @@ class SessionManager:
         try:
             # Step 1: Search YouTube
             session.status = SessionStatus.SEARCHING
-            candidates = await asyncio.to_thread(self._youtube.search, session.mode, session.query)
+            candidates = await asyncio.to_thread(
+                self._youtube.search, session.mode, session.query,
+                api_key=session.youtube_api_key,
+            )
             session.candidates = candidates
 
             if not candidates:
@@ -116,7 +119,10 @@ class SessionManager:
 
         except Exception as e:
             session.status = SessionStatus.ERROR
-            session.error = str(e)
+            error_msg = str(e)
+            if not session.youtube_api_key:
+                error_msg += " — Add your YouTube API key in Settings for reliable access."
+            session.error = error_msg
 
     def get_mix_command(self, session_id: str) -> MixCommand | None:
         """Get the next mix command for the current position."""

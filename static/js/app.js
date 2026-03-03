@@ -589,7 +589,7 @@ class DjwalaApp {
 
         if (state === 'ready') {
             playBtn.textContent = '▶';
-            this.els.playerTitle.textContent = '▶ Tap Play to Start Your Mix';
+            this.els.playerTitle.textContent = 'Tap Play to Start';
             this.els.playerMeta.textContent = `${this.queue.length} tracks ready`;
             // Show thumbnail of first track
             const track = this.queue[this.currentIndex];

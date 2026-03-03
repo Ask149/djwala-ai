@@ -272,6 +272,8 @@ class DjwalaApp {
             deckProgressFill: document.getElementById('deckProgressFill'),
             partyWaveformLeft: document.getElementById('partyWaveformLeft'),
             partyWaveformRight: document.getElementById('partyWaveformRight'),
+            hero: document.querySelector('.hero'),
+            loadingSkeleton: document.getElementById('loadingSkeleton'),
         };
 
         this.mode = 'artists';
@@ -388,6 +390,12 @@ class DjwalaApp {
         const hiw = document.getElementById('howItWorks');
         if (hiw) hiw.classList.add('hidden');
         this.els.moodGrid.classList.add('hidden');
+
+        // Collapse hero to reclaim vertical space
+        this.els.hero.classList.add('collapsed');
+
+        // Show skeleton loading state
+        this.els.loadingSkeleton.classList.add('active');
 
         this.trackEvent('mix_start', { mode: this.mode, query });
 
@@ -545,6 +553,10 @@ class DjwalaApp {
     startPlaying() {
         this.hideStatus();
         this.els.goBtn.disabled = false;
+
+        // Hide skeleton loading state
+        this.els.loadingSkeleton.classList.remove('active');
+
         this.updateNowPlaying();
         this.updateQueue();
         this.renderTimeline();
@@ -555,6 +567,11 @@ class DjwalaApp {
         const track = this.queue[this.currentIndex];
         const nextTrack = this.queue[this.currentIndex + 1] || null;
         this.showDeck(track, nextTrack);
+
+        // Auto-scroll to player bar so user sees the play CTA
+        setTimeout(() => {
+            this.els.playerBar.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 300);
     }
 
     showPlayerBar(state) {
@@ -572,8 +589,8 @@ class DjwalaApp {
 
         if (state === 'ready') {
             playBtn.textContent = '▶';
-            this.els.playerTitle.textContent = 'Tap play to start';
-            this.els.playerMeta.textContent = '';
+            this.els.playerTitle.textContent = '▶ Tap Play to Start Your Mix';
+            this.els.playerMeta.textContent = `${this.queue.length} tracks ready`;
             // Show thumbnail of first track
             const track = this.queue[this.currentIndex];
             if (track) {
@@ -1592,6 +1609,7 @@ class DjwalaApp {
             const hiw = document.getElementById('howItWorks');
             if (hiw) hiw.classList.add('hidden');
             this.els.moodGrid.classList.add('hidden');
+            this.els.hero.classList.add('collapsed');
 
             // Show chips
             if (saved.mode === 'artists' && saved.query) {

@@ -25,6 +25,15 @@ h1 {
     letter-spacing: -0.02em;
 }
 
+.home-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.home-link:hover {
+    color: #1DB954;
+}
+
 /* Hero */
 .hero {
     text-align: center;

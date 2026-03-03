@@ -1,0 +1,17 @@
+{
+  "name": "DjwalaAI — AI-Powered Auto-DJ",
+  "short_name": "DjwalaAI",
+  "description": "Type any artists. Get a seamless DJ mix with BPM matching and smooth crossfades. Free.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0a0a0f",
+  "background_color": "#0a0a0f",
+  "icons": [
+    {
+      "src": "/static/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

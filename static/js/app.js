@@ -295,7 +295,7 @@ class DjwalaApp {
         this.engine.init();
         this.initKeyboardShortcuts();
         this.updateKeyStatus();
-        this.loadFromURLParams();
+        this.initRestore();
         this.trackEvent('page_view', { referrer: document.referrer || null });
     }
 
@@ -372,6 +372,8 @@ class DjwalaApp {
         const query = this.els.searchInput.value.trim();
         if (!query) return;
 
+        this.clearSavedSession();
+
         if (this.mode === 'artists') {
             const artists = this.parseArtists(query);
             this.showArtistChips(artists);
@@ -404,6 +406,7 @@ class DjwalaApp {
             });
             const data = await resp.json();
             this.sessionId = data.session_id;
+            this.saveSession();
 
             // Poll for queue readiness
             this.pollQueue();
@@ -461,6 +464,7 @@ class DjwalaApp {
             if (data.tracks && data.tracks.length > 0) {
                 this.queue = data.tracks;
                 this.currentIndex = data.current_index;
+                this.saveSession();
             }
         } catch {
             // Silently ignore — worst case is stale UI
@@ -886,6 +890,7 @@ class DjwalaApp {
                 this.completeDeckCrossfade(newTrack, nextTrack);
             }
         }
+        this.saveSession();
     }
 
     onPlaybackError(errorCode) {
@@ -1516,6 +1521,108 @@ class DjwalaApp {
             document.title = `▶ ${track.title} — DjwalaAI`;
         } else {
             document.title = 'DjwalaAI — AI-Powered Auto-DJ | Free Seamless Music Mixes';
+        }
+    }
+
+    // --- Session Persistence ---
+
+    saveSession() {
+        if (!this.sessionId) return;
+        const data = {
+            sessionId: this.sessionId,
+            mode: this.mode,
+            query: this.els.searchInput.value.trim(),
+            moodId: this.moodId || null,
+            currentIndex: this.currentIndex,
+        };
+        localStorage.setItem('djwala_session', JSON.stringify(data));
+    }
+
+    clearSavedSession() {
+        localStorage.removeItem('djwala_session');
+    }
+
+    async restoreSession() {
+        const raw = localStorage.getItem('djwala_session');
+        if (!raw) return false;
+
+        let saved;
+        try {
+            saved = JSON.parse(raw);
+        } catch {
+            this.clearSavedSession();
+            return false;
+        }
+
+        if (!saved.sessionId) {
+            this.clearSavedSession();
+            return false;
+        }
+
+        // Verify session still exists on backend
+        try {
+            const resp = await fetch(`/session/${saved.sessionId}/queue`);
+            if (!resp.ok) {
+                this.clearSavedSession();
+                return false;
+            }
+
+            const data = await resp.json();
+            if (data.status !== 'ready' || !data.tracks || data.tracks.length === 0) {
+                this.clearSavedSession();
+                return false;
+            }
+
+            // Restore state
+            this.sessionId = saved.sessionId;
+            this.mode = saved.mode || 'artists';
+            this.moodId = saved.moodId || null;
+            this.queue = data.tracks;
+            this.currentIndex = data.current_index;
+
+            // Restore UI
+            if (saved.mode && saved.mode !== 'artists') {
+                this.setMode(saved.mode);
+            }
+            if (saved.query) {
+                this.els.searchInput.value = saved.query;
+            }
+
+            // Hide landing page elements
+            const hiw = document.getElementById('howItWorks');
+            if (hiw) hiw.classList.add('hidden');
+            this.els.moodGrid.classList.add('hidden');
+
+            // Show chips
+            if (saved.mode === 'artists' && saved.query) {
+                this.showArtistChips(this.parseArtists(saved.query));
+            } else if (saved.query) {
+                this.showArtistChips([saved.query]);
+            }
+
+            // Show queue, timeline, player bar
+            this.connectWebSocket();
+            this.startPlaying();
+            return true;
+        } catch {
+            this.clearSavedSession();
+            return false;
+        }
+    }
+
+    async initRestore() {
+        // URL params take priority (shared links)
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('mood') || params.has('mode') || params.has('q')) {
+            this.clearSavedSession();
+            this.loadFromURLParams();
+            return;
+        }
+
+        // Try to restore previous session
+        const restored = await this.restoreSession();
+        if (!restored) {
+            // No session to restore — normal landing page
         }
     }
 }

@@ -78,6 +78,16 @@ async def root():
     raise HTTPException(404, "index.html not found")
 
 
+@app.get("/sw.js")
+async def service_worker():
+    """Serve service worker from root for correct scope."""
+    from fastapi.responses import FileResponse
+    sw = STATIC_DIR / "sw.js"
+    if sw.is_file():
+        return FileResponse(sw, media_type="application/javascript")
+    raise HTTPException(404, "sw.js not found")
+
+
 @app.post("/session")
 @limiter.limit(settings.rate_limit)
 async def create_session(request: Request, req: SessionCreate):

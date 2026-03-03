@@ -20,7 +20,8 @@ class TestQueryBuilding:
     def test_mood_queries_house_party(self):
         yt = YouTubeSearch()
         queries = yt.build_queries(InputMode.MOOD, "house-party")
-        assert queries == ["house party hits", "club bangers 2024"]
+        assert len(queries) == 3
+        assert all("official audio" in q.lower() for q in queries)
 
     def test_mood_queries_all_presets_exist(self):
         from djwala.youtube import MOOD_PRESETS

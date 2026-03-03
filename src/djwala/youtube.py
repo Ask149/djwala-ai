@@ -39,16 +39,50 @@ _DESI_HINTS = {
     "anirudh", "ar rahman", "a.r. rahman",
 }
 
-# Mood preset search queries — each mood maps to YouTube search terms
+# Mood preset search queries — artist-based to ensure individual songs
+# (genre queries like "chill lofi beats" return multi-hour mixes that get
+# filtered out by MAX_DURATION)
 MOOD_PRESETS = {
-    "house-party": ["house party hits", "club bangers 2024"],
-    "road-trip": ["road trip songs", "driving music hits"],
-    "late-night": ["late night r&b", "midnight vibes"],
-    "chill-vibes": ["chill lofi beats", "relaxing music"],
-    "workout": ["workout music", "gym motivation songs"],
-    "bollywood": ["bollywood party songs", "hindi hits"],
-    "hip-hop": ["hip hop hits 2024", "rap bangers"],
-    "latin": ["reggaeton hits", "latin party music"],
+    "house-party": [
+        "Dua Lipa official audio",
+        "Calvin Harris official audio",
+        "The Chainsmokers official audio",
+    ],
+    "road-trip": [
+        "Fleetwood Mac official audio",
+        "Tom Petty official audio",
+        "Red Hot Chili Peppers official audio",
+    ],
+    "late-night": [
+        "The Weeknd official audio",
+        "Frank Ocean official audio",
+        "SZA official audio",
+    ],
+    "chill-vibes": [
+        "Billie Eilish official audio",
+        "Laufey official audio",
+        "Khalid official audio",
+    ],
+    "workout": [
+        "Eminem official audio",
+        "Kanye West official audio",
+        "Imagine Dragons official audio",
+    ],
+    "bollywood": [
+        "Arijit Singh full video song",
+        "Pritam lyrical video",
+        "AP Dhillon official audio",
+    ],
+    "hip-hop": [
+        "Kendrick Lamar official audio",
+        "Drake official audio",
+        "Travis Scott official audio",
+    ],
+    "latin": [
+        "Bad Bunny official audio",
+        "J Balvin official audio",
+        "Shakira official audio",
+    ],
 }
 
 # Min/max duration for a single track (seconds)

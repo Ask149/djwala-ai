@@ -2,13 +2,14 @@
 // Mix Engine — manages two YouTube IFrame players and crossfading
 
 class MixEngine {
-    constructor(onTrackChange) {
+    constructor(onTrackChange, onError) {
         this.deckA = null;
         this.deckB = null;
         this.activeDeck = 'A';
         this.isFading = false;
         this.fadeInterval = null;
         this.onTrackChange = onTrackChange || (() => {});
+        this.onError = onError || (() => {});
         this._playersReady = { A: false, B: false };
         this._pendingPlay = null;
         this._warmUpPending = false;
@@ -36,6 +37,7 @@ class MixEngine {
                 events: {
                     onReady: () => { this._playersReady.A = true; this._checkPending(); },
                     onStateChange: (e) => this._onStateChange('A', e),
+                    onError: (e) => this._onError('A', e),
                 },
             });
             this.deckB = new YT.Player('yt-player-b', {
@@ -44,6 +46,7 @@ class MixEngine {
                 events: {
                     onReady: () => { this._playersReady.B = true; this._checkPending(); },
                     onStateChange: (e) => this._onStateChange('B', e),
+                    onError: (e) => this._onError('B', e),
                 },
             });
         };
@@ -169,6 +172,15 @@ class MixEngine {
                 this.onTrackChange();
             }
         }
+    }
+
+    _onError(deck, event) {
+        // Only handle errors on the active deck (ignore warm-up errors on inactive)
+        const isActive = (deck === this.activeDeck);
+        if (!isActive) return;
+
+        console.warn(`[MixEngine] YouTube error on deck ${deck}: code ${event.data}`);
+        this.onError(event.data);
     }
 
     destroy() {

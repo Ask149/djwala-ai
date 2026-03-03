@@ -12,7 +12,7 @@ class WaveformRenderer {
         this.bars = [];
         this.bpm = 120;
         this.playheadPct = 0;
-        this.color = { r: 102, g: 126, b: 234 }; // default purple-blue
+        this.color = { r: 29, g: 185, b: 84 }; // default green (Spotify)
         this.animId = null;
         this.startTime = 0;
     }
@@ -188,7 +188,7 @@ class ColorExtractor {
             this.cache[videoId] = result;
             return result;
         } catch {
-            const fallback = { r: 102, g: 126, b: 234 };
+            const fallback = { r: 29, g: 185, b: 84 };
             this.cache[videoId] = fallback;
             return fallback;
         }
@@ -1005,8 +1005,8 @@ class DjwalaApp {
 
         // Color palette for tracks (cycles)
         const colors = [
-            'rgba(102,126,234,0.35)', // blue
-            'rgba(118,75,162,0.35)',   // purple
+            'rgba(29,185,84,0.35)',    // green (primary)
+            'rgba(30,215,96,0.35)',    // light green
             'rgba(74,222,128,0.35)',   // green
             'rgba(251,191,36,0.35)',   // amber
             'rgba(244,114,182,0.35)', // pink

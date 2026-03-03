@@ -82,7 +82,7 @@ https://djwala-ai.fly.dev/?mood=house-party
 
 ```bash
 uv run pytest tests/ -v
-# 133 tests passing
+# 141 tests passing
 ```
 
 ## Deploy

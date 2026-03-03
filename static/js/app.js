@@ -204,8 +204,12 @@ class DjwalaApp {
         this.mixCommand = null;
         this.positionTimer = null;
         this.playerState = 'hidden';
+        this.consecutiveErrors = 0;
 
-        this.engine = new MixEngine(() => this.onTrackEnded());
+        this.engine = new MixEngine(
+            () => this.onTrackEnded(),
+            (errorCode) => this.onPlaybackError(errorCode)
+        );
 
         this.els = {
             modeToggle: document.querySelector('.mode-toggle'),
@@ -776,6 +780,11 @@ class DjwalaApp {
             const currentTime = this.engine.getCurrentTime();
             const duration = this.engine.getDuration();
 
+            // Reset consecutive error counter on successful playback
+            if (currentTime > 1 && this.consecutiveErrors > 0) {
+                this.consecutiveErrors = 0;
+            }
+
             // Update progress bar
             if (duration > 0) {
                 const pct = (currentTime / duration) * 100;
@@ -877,6 +886,46 @@ class DjwalaApp {
                 this.completeDeckCrossfade(newTrack, nextTrack);
             }
         }
+    }
+
+    onPlaybackError(errorCode) {
+        this.consecutiveErrors++;
+        console.warn(`[DjwalaAI] Playback error ${errorCode}, consecutive: ${this.consecutiveErrors}`);
+
+        if (this.consecutiveErrors >= 3) {
+            this.showToast('Multiple tracks unavailable. Try a different search.', 5000);
+            this.showPlayerBar('ready');
+            return;
+        }
+
+        const track = this.queue[this.currentIndex];
+        const name = track ? track.title : 'Track';
+        this.showToast(`${name} unavailable, skipping...`);
+
+        // Auto-advance to next track
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ action: 'track_ended' }));
+            this.requestMixCommand();
+        }
+    }
+
+    showToast(message, duration = 3000) {
+        // Remove existing toast
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        // Trigger animation
+        requestAnimationFrame(() => toast.classList.add('visible'));
+
+        setTimeout(() => {
+            toast.classList.remove('visible');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
     }
 
     updateNowPlaying() {

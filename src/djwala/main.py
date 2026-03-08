@@ -67,6 +67,8 @@ class SessionCreate(BaseModel):
     query: str
     youtube_api_key: str | None = None
     mix_length: int = Field(default=50, ge=0, le=100)
+    playlist_id: str | None = None
+    playlist_source: str | None = None  # "youtube" or "spotify"
 
 
 @app.get("/health")
@@ -103,7 +105,8 @@ async def create_session(request: Request, req: SessionCreate):
     except ValueError:
         raise HTTPException(400, f"Invalid mode: {req.mode}")
 
-    session = manager.create_session(mode, req.query, youtube_api_key=req.youtube_api_key, mix_length=req.mix_length)
+    session = manager.create_session(mode, req.query, youtube_api_key=req.youtube_api_key, mix_length=req.mix_length,
+                                     playlist_id=req.playlist_id, playlist_source=req.playlist_source)
     # Start building queue in background
     task = asyncio.create_task(
         manager.build_queue(session.session_id),

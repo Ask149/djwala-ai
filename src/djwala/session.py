@@ -12,6 +12,12 @@ from djwala.analyzer import AudioAnalyzer
 from djwala.brain import DJBrain
 from djwala.cache import AnalysisCache
 from djwala.models import InputMode, MixCommand, TrackAnalysis, TrackInfo
+from djwala.providers import (
+    fetch_spotify_playlist_tracks,
+    fetch_spotify_audio_features,
+    fetch_youtube_playlist_tracks,
+    spotify_features_to_analysis,
+)
 from djwala.youtube import YouTubeSearch
 
 logger = logging.getLogger(__name__)
@@ -38,6 +44,16 @@ class Session:
     youtube_api_key: str | None = None  # user-provided, in-memory only, never persisted
     mix_length: int = 50
     seen_ids: set[str] = field(default_factory=set)
+    playlist_id: str | None = None
+    playlist_source: str | None = None  # "youtube" or "spotify"
+
+
+def search_youtube_for_spotify_track(name: str, artists: str, *, api_key: str | None = None) -> TrackInfo | None:
+    """Search YouTube for a Spotify track by name + artist."""
+    yt = YouTubeSearch(api_key=api_key)
+    query = f"{artists} - {name}"
+    result = yt.search_song(query, api_key=api_key)
+    return result
 
 
 class SessionManager:
@@ -50,7 +66,8 @@ class SessionManager:
         self._brain = DJBrain()
         self._cache = AnalysisCache(db_path=database_path)
 
-    def create_session(self, mode: InputMode, query: str, youtube_api_key: str | None = None, mix_length: int = 50) -> Session:
+    def create_session(self, mode: InputMode, query: str, youtube_api_key: str | None = None, mix_length: int = 50,
+                       playlist_id: str | None = None, playlist_source: str | None = None) -> Session:
         session_id = str(uuid.uuid4())[:8]
         session = Session(
             session_id=session_id,
@@ -58,6 +75,8 @@ class SessionManager:
             query=query,
             youtube_api_key=youtube_api_key,
             mix_length=mix_length,
+            playlist_id=playlist_id,
+            playlist_source=playlist_source,
         )
         self._sessions[session_id] = session
         return session
@@ -83,13 +102,17 @@ class SessionManager:
             logger.warning("Analysis failed for %s, using estimates", track.video_id)
             return self._analyzer.estimate(track, mix_length=mix_length)
 
-    async def build_queue(self, session_id: str) -> None:
+    async def build_queue(self, session_id: str, spotify_token: str | None = None,
+                          google_token: str | None = None) -> None:
         """Search YouTube, analyze tracks, build ordered queue."""
         session = self._sessions.get(session_id)
         if not session:
             return
 
-        if session.mode == InputMode.SONG:
+        if session.mode == InputMode.PLAYLIST:
+            await self._build_playlist_queue(session, spotify_token=spotify_token,
+                                             google_token=google_token)
+        elif session.mode == InputMode.SONG:
             await self._build_song_queue(session)
         else:
             await self._build_artists_queue(session)
@@ -174,6 +197,83 @@ class SessionManager:
             # Step 4: Seed first, DJ Brain orders the rest
             session.queue = [seed_analysis] + self._brain.order_playlist(analyzed)
             session.status = SessionStatus.READY
+
+        except Exception as e:
+            session.status = SessionStatus.ERROR
+            session.error = str(e)
+
+    async def _build_playlist_queue(self, session: Session, *,
+                                     spotify_token: str | None = None,
+                                     google_token: str | None = None) -> None:
+        """Build queue from a user's playlist (YouTube or Spotify)."""
+        try:
+            session.status = SessionStatus.SEARCHING
+
+            if session.playlist_source == "spotify" and spotify_token:
+                # Spotify flow: get tracks → audio features → find YouTube videos
+                sp_tracks = await asyncio.to_thread(
+                    fetch_spotify_playlist_tracks, session.playlist_id, spotify_token,
+                )
+                if not sp_tracks:
+                    session.status = SessionStatus.ERROR
+                    session.error = "Playlist is empty"
+                    return
+
+                # Get audio features in batch
+                track_ids = [t["spotify_id"] for t in sp_tracks]
+                features = await asyncio.to_thread(
+                    fetch_spotify_audio_features, track_ids, spotify_token,
+                )
+                features_map = {f["id"]: f for f in features}
+
+                # Convert to TrackAnalysis + find YouTube videos
+                session.status = SessionStatus.ANALYZING
+                analyzed = []
+                for sp_track in sp_tracks:
+                    feat = features_map.get(sp_track["spotify_id"])
+                    if not feat:
+                        continue
+
+                    # Find YouTube video for this track
+                    yt_track = await asyncio.to_thread(
+                        search_youtube_for_spotify_track,
+                        sp_track["name"], sp_track["artists"],
+                        api_key=session.youtube_api_key,
+                    )
+                    video_id = yt_track.video_id if yt_track else f"sp_{sp_track['spotify_id']}"
+
+                    analysis = spotify_features_to_analysis(
+                        feat, title=f"{sp_track['artists']} - {sp_track['name']}",
+                        video_id=video_id,
+                    )
+                    analyzed.append(analysis)
+
+                session.queue = self._brain.order_playlist(analyzed)
+                session.status = SessionStatus.READY
+
+            elif session.playlist_source == "youtube" and google_token:
+                # YouTube flow: get tracks → analyze each
+                yt_tracks = await asyncio.to_thread(
+                    fetch_youtube_playlist_tracks, session.playlist_id, google_token,
+                )
+                if not yt_tracks:
+                    session.status = SessionStatus.ERROR
+                    session.error = "Playlist is empty"
+                    return
+
+                session.status = SessionStatus.ANALYZING
+                session.candidates = yt_tracks
+                analyzed = []
+                for track in yt_tracks[:10]:  # Limit initial batch
+                    analysis = await self._analyze_track(track, session.mix_length)
+                    analyzed.append(analysis)
+
+                session.queue = self._brain.order_playlist(analyzed)
+                session.status = SessionStatus.READY
+
+            else:
+                session.status = SessionStatus.ERROR
+                session.error = "Missing authentication token for playlist source"
 
         except Exception as e:
             session.status = SessionStatus.ERROR

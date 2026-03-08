@@ -1746,3 +1746,24 @@ body.deck-active {
     .share-label { display: none; }
     .hero.collapsed h1 { font-size: 1.25rem; }
 }
+
+/* Playback Preference Buttons */
+.pref-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.pref-btn.active {
+    color: #1DB954;
+}
+
+.pref-indicator {
+    font-size: 0.6rem;
+    color: #666;
+    transition: color 0.2s;
+}

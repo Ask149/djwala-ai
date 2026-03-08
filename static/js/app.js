@@ -195,6 +195,195 @@ class ColorExtractor {
     }
 }
 
+// --- Spotify Web Playback SDK Wrapper ---
+// Handles conditional SDK loading, player init, playback, and volume control.
+// Falls back to YouTube if Spotify playback fails.
+
+class SpotifyPlayerWrapper {
+    constructor() {
+        this.player = null;
+        this.deviceId = null;
+        this.ready = false;
+        this._sdkLoaded = false;
+        this._initPromise = null;
+    }
+
+    /**
+     * Load SDK script and initialize player. Returns true if ready.
+     * Only loads SDK once; subsequent calls reuse existing player.
+     */
+    async init() {
+        if (this.ready && this.player) return true;
+        if (this._initPromise) return this._initPromise;
+
+        this._initPromise = this._doInit();
+        const result = await this._initPromise;
+        this._initPromise = null;
+        return result;
+    }
+
+    async _doInit() {
+        // Fetch a token to verify Spotify Premium is available
+        const tokenResp = await fetch('/auth/spotify/player-token');
+        if (!tokenResp.ok) {
+            console.warn('[SpotifyPlayer] Cannot get player token:', tokenResp.status);
+            return false;
+        }
+        const { access_token } = await tokenResp.json();
+
+        // Load SDK script if not already loaded
+        if (!this._sdkLoaded) {
+            // Register callback BEFORE loading SDK to avoid race condition
+            // where SDK loads and fires before callback is registered
+            if (typeof Spotify === 'undefined') {
+                const sdkReady = new Promise(resolve => {
+                    window.onSpotifyWebPlaybackSDKReady = resolve;
+                });
+                await this._loadSDK();
+                this._sdkLoaded = true;
+                await sdkReady;
+            } else {
+                await this._loadSDK();
+                this._sdkLoaded = true;
+            }
+        } else if (typeof Spotify === 'undefined') {
+            // SDK script loaded but global not yet available
+            await new Promise(resolve => {
+                window.onSpotifyWebPlaybackSDKReady = resolve;
+            });
+        }
+
+        return new Promise((resolve) => {
+            this.player = new Spotify.Player({
+                name: 'DjwalaAI',
+                getOAuthToken: async (cb) => {
+                    try {
+                        const resp = await fetch('/auth/spotify/player-token');
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            cb(data.access_token);
+                        } else {
+                            cb('');
+                        }
+                    } catch {
+                        cb('');
+                    }
+                },
+                volume: 1.0,
+            });
+
+            this.player.addListener('ready', ({ device_id }) => {
+                console.log('[SpotifyPlayer] Ready with device:', device_id);
+                this.deviceId = device_id;
+                this.ready = true;
+                resolve(true);
+            });
+
+            this.player.addListener('not_ready', ({ device_id }) => {
+                console.warn('[SpotifyPlayer] Device went offline:', device_id);
+                this.ready = false;
+            });
+
+            this.player.addListener('initialization_error', ({ message }) => {
+                console.error('[SpotifyPlayer] Init error:', message);
+                resolve(false);
+            });
+
+            this.player.addListener('authentication_error', ({ message }) => {
+                console.error('[SpotifyPlayer] Auth error:', message);
+                resolve(false);
+            });
+
+            this.player.addListener('account_error', ({ message }) => {
+                console.error('[SpotifyPlayer] Account error (Premium required):', message);
+                resolve(false);
+            });
+
+            this.player.connect();
+
+            // Timeout — if SDK doesn't connect in 10s, fail gracefully
+            setTimeout(() => {
+                if (!this.ready) {
+                    console.warn('[SpotifyPlayer] Connection timeout');
+                    resolve(false);
+                }
+            }, 10000);
+        });
+    }
+
+    _loadSDK() {
+        return new Promise((resolve, reject) => {
+            if (document.getElementById('spotify-sdk')) {
+                resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.id = 'spotify-sdk';
+            script.src = 'https://sdk.scdn.co/spotify-player.js';
+            script.addEventListener('load', resolve);
+            script.addEventListener('error', reject);
+            document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Play a Spotify URI on this device.
+     * @param {string} spotifyUri - e.g. "spotify:track:xxx"
+     * @param {number} seekMs - position in ms to start from
+     * @returns {boolean} true if playback started
+     */
+    async play(spotifyUri, seekMs = 0) {
+        if (!this.ready || !this.deviceId) return false;
+
+        try {
+            const tokenResp = await fetch('/auth/spotify/player-token');
+            if (!tokenResp.ok) return false;
+            const { access_token } = await tokenResp.json();
+
+            const resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${access_token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    uris: [spotifyUri],
+                    position_ms: seekMs,
+                }),
+            });
+
+            return resp.ok || resp.status === 204;
+        } catch (err) {
+            console.error('[SpotifyPlayer] Play error:', err);
+            return false;
+        }
+    }
+
+    setVolume(vol) {
+        // vol: 0-100 (matching YouTube API), Spotify uses 0-1
+        if (this.player) {
+            this.player.setVolume(Math.max(0, Math.min(1, vol / 100)));
+        }
+    }
+
+    pause() {
+        if (this.player) this.player.pause();
+    }
+
+    resume() {
+        if (this.player) this.player.resume();
+    }
+
+    disconnect() {
+        if (this.player) {
+            this.player.disconnect();
+            this.ready = false;
+            this.deviceId = null;
+        }
+    }
+}
+
+
 class DjwalaApp {
     constructor() {
         this.sessionId = null;
@@ -296,6 +485,12 @@ class DjwalaApp {
         // Auth state
         this.authUser = null;
         this.authStatus = null;
+        // Spotify playback state
+        this.spotifyPlayer = new SpotifyPlayerWrapper();
+        this.playbackPref = localStorage.getItem('djwala_playback_pref') || 'youtube';
+        this._spotifyUriCache = {};  // title → spotify URI cache
+        this._spotifyCrossfadeHandled = false;  // set by _spotifyCrossfade to prevent duplicate play in onTrackEnded
+        this._currentSpotifyUri = null;
         this.bindEvents();
         this.engine.init();
         this.initKeyboardShortcuts();
@@ -761,6 +956,11 @@ class DjwalaApp {
             this.requestMixCommand();
             this.startPositionMonitor();
             this.showPlayerBar('playing');
+
+            // If Spotify preferred, mute YouTube and play via Spotify
+            if (this.playbackPref === 'spotify') {
+                this._startSpotifyForTrack(track);
+            }
         } else if (this.playerState === 'paused') {
             this.engine.resume();
             this.showPlayerBar('playing');
@@ -768,12 +968,101 @@ class DjwalaApp {
                 this.waveformL.startAnimation();
                 this.waveformR.startAnimation();
             }
+            if (this.playbackPref === 'spotify' && this.spotifyPlayer.ready) {
+                this.spotifyPlayer.resume();
+            }
         } else if (this.playerState === 'playing') {
             this.engine.pause();
             this.showPlayerBar('paused');
             this.waveformL.stopAnimation();
             this.waveformR.stopAnimation();
+            if (this.playbackPref === 'spotify' && this.spotifyPlayer.ready) {
+                this.spotifyPlayer.pause();
+            }
         }
+    }
+
+    /**
+     * Start Spotify playback for a track, muting YouTube audio.
+     * Falls back to YouTube (unmutes) if Spotify fails.
+     */
+    async _startSpotifyForTrack(track, seekMs = 0) {
+        // Mute YouTube — it still runs for timing
+        this.engine.getActiveDeck()?.setVolume(0);
+
+        const uri = await this._resolveSpotifyUri(track.title);
+        if (!uri) {
+            console.warn('[Spotify] No URI found for:', track.title);
+            this._spotifyFallbackToYouTube(track.title);
+            return;
+        }
+
+        const inPointMs = seekMs || Math.round((track.mix_in_point || 0) * 1000);
+        const ok = await this.spotifyPlayer.play(uri, inPointMs);
+        if (!ok) {
+            console.warn('[Spotify] Playback failed for:', track.title);
+            this._spotifyFallbackToYouTube(track.title);
+            return;
+        }
+
+        this._currentSpotifyUri = uri;
+    }
+
+    /**
+     * Fallback: unmute YouTube and show toast when Spotify playback fails.
+     */
+    _spotifyFallbackToYouTube(trackTitle) {
+        this.engine.getActiveDeck()?.setVolume(100);
+        this._currentSpotifyUri = null;
+        const shortTitle = trackTitle.length > 40 ? trackTitle.substring(0, 40) + '...' : trackTitle;
+        this.showToast(`Playing via YouTube: ${shortTitle}`);
+    }
+
+    /**
+     * Crossfade Spotify audio: fade out current track, start next track,
+     * fade in next track. YouTube MixEngine handles timing independently.
+     */
+    async _spotifyCrossfade(nextTrack, fadeDuration) {
+        // Mark that crossfade is handling the next Spotify track,
+        // so onTrackEnded() won't redundantly restart the old track
+        this._spotifyCrossfadeHandled = true;
+
+        // Resolve the next track's Spotify URI
+        const nextUri = await this._resolveSpotifyUri(nextTrack.title);
+        if (!nextUri) {
+            // Next track not on Spotify — YouTube will play it audibly
+            // after crossfade completes (onTrackEnded sets volume)
+            return;
+        }
+
+        const steps = 30;
+        const interval = (fadeDuration * 1000) / steps;
+        let step = 0;
+
+        // Start next track at volume 0 on Spotify
+        const inPointMs = Math.round((nextTrack.mix_in_point || 0) * 1000);
+        const started = await this.spotifyPlayer.play(nextUri, inPointMs);
+        if (!started) return;
+
+        // Temporarily set Spotify volume to 0 for fade-in
+        this.spotifyPlayer.setVolume(0);
+
+        // Note: Spotify SDK only has one "player" — it switches tracks.
+        // We can't crossfade two Spotify tracks simultaneously.
+        // Instead, we do a quick dip: fade out old → switch to new → fade in.
+        // The YouTube crossfade provides continuous audio underneath (muted).
+
+        const fadeIn = setInterval(() => {
+            step++;
+            const progress = step / steps;
+            const vol = Math.round(Math.sin(progress * Math.PI / 2) * 100);
+            this.spotifyPlayer.setVolume(vol);
+
+            if (step >= steps) {
+                clearInterval(fadeIn);
+                this._currentSpotifyUri = nextUri;
+            }
+        }, interval);
     }
 
     onSkipTap() {
@@ -781,6 +1070,14 @@ class DjwalaApp {
         if (this.engine.isFading) return;
 
         if (this.mixCommand) {
+            // Trigger Spotify crossfade before YouTube crossfade
+            if (this.playbackPref === 'spotify' && this.spotifyPlayer.ready) {
+                const nextTrack = this.queue[this.currentIndex + 1];
+                if (nextTrack) {
+                    this._spotifyCrossfade(nextTrack, this.mixCommand.fade_duration);
+                }
+            }
+
             this.engine.crossfadeTo(
                 this.mixCommand.next_video_id,
                 this.mixCommand.next_seek_to,
@@ -867,6 +1164,15 @@ class DjwalaApp {
                     }
                     this._fadeStartTime = performance.now();
                     this._lastFadeDuration = this.mixCommand.fade_duration;
+
+                    // Start Spotify crossfade if using Spotify playback
+                    if (this.playbackPref === 'spotify' && this.spotifyPlayer.ready) {
+                        const nextTrack = this.queue[this.currentIndex + 1];
+                        if (nextTrack) {
+                            this._spotifyCrossfade(nextTrack, this.mixCommand.fade_duration);
+                        }
+                    }
+
                     this.engine.crossfadeTo(
                         this.mixCommand.next_video_id,
                         this.mixCommand.next_seek_to,
@@ -921,6 +1227,19 @@ class DjwalaApp {
             const nextTrack = this.queue[this.currentIndex + 1] || null;
             if (newTrack) {
                 this.completeDeckCrossfade(newTrack, nextTrack);
+            }
+        }
+        // Keep Spotify in sync: if pref is Spotify and track changed
+        // outside of crossfade (e.g., track ended naturally), start new track.
+        // Skip if _spotifyCrossfade already handled the transition.
+        if (this.playbackPref === 'spotify' && this.spotifyPlayer.ready) {
+            if (this._spotifyCrossfadeHandled) {
+                this._spotifyCrossfadeHandled = false;  // consume the flag
+            } else {
+                const newTrack = this.queue[this.currentIndex];
+                if (newTrack) {
+                    this._startSpotifyForTrack(newTrack);
+                }
             }
         }
         this.saveSession();
@@ -1537,6 +1856,11 @@ class DjwalaApp {
             const me = await meResp.json();
             if (me.logged_in) {
                 this.authUser = me.user;
+                // Restore playback preference from server
+                if (me.user.playback_preference && me.user.has_spotify && me.user.spotify_is_premium) {
+                    this.playbackPref = me.user.playback_preference;
+                    localStorage.setItem('djwala_playback_pref', this.playbackPref);
+                }
                 this.showLoggedIn(me.user);
             } else {
                 this.showLoggedOut(status);
@@ -1560,24 +1884,38 @@ class DjwalaApp {
         // Connected accounts
         const connected = document.getElementById('connectedAccounts');
         connected.innerHTML = '<div class="dropdown-label">Connected</div>';
-        if (user.google_linked) {
+        if (user.has_google) {
             connected.innerHTML += '<div class="dropdown-item connected">✓ YouTube</div>';
         }
-        if (user.spotify_linked) {
+        if (user.has_spotify) {
             connected.innerHTML += '<div class="dropdown-item connected">✓ Spotify</div>';
         }
 
         // Link accounts
         const link = document.getElementById('linkAccounts');
         link.innerHTML = '';
-        if (!user.google_linked) {
+        if (!user.has_google) {
             link.innerHTML += '<a class="dropdown-item link-btn" href="/auth/google/login?link=1">Link YouTube</a>';
         }
-        if (!user.spotify_linked) {
+        if (!user.has_spotify) {
             link.innerHTML += '<a class="dropdown-item link-btn" href="/auth/spotify/login?link=1">Link Spotify</a>';
         }
         if (link.innerHTML === '') {
             link.previousElementSibling.style.display = 'none'; // hide divider
+        }
+
+        // Playback preference (only show if Spotify Premium is connected)
+        const prefSection = document.getElementById('playbackPref');
+        const prefDivider = document.getElementById('playbackPrefDivider');
+        if (user.has_spotify && user.spotify_is_premium) {
+            prefSection.style.display = '';
+            prefDivider.style.display = '';
+            this._updatePrefUI();
+        } else {
+            prefSection.style.display = 'none';
+            prefDivider.style.display = 'none';
+            // Reset to YouTube if user doesn't have Premium
+            this.playbackPref = 'youtube';
         }
     }
 
@@ -1622,6 +1960,82 @@ class DjwalaApp {
         // If in playlist mode, switch back to artists
         if (this.mode === 'playlist') this.setMode('artists');
         this.showLoggedOut(this.authStatus || {});
+        // Disconnect Spotify player on logout
+        this.spotifyPlayer.disconnect();
+        this.playbackPref = 'youtube';
+        localStorage.removeItem('djwala_playback_pref');
+    }
+
+    // --- Playback Preference ---
+
+    async setPlaybackPref(pref) {
+        if (pref === this.playbackPref) return;
+
+        if (pref === 'spotify') {
+            // Initialize Spotify player if not ready
+            const ok = await this.spotifyPlayer.init();
+            if (!ok) {
+                this.showToast('Could not connect to Spotify. Check your Premium subscription.');
+                return;
+            }
+            // Persist preference to server
+            try {
+                await fetch('/auth/playback-preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preference: 'spotify' }),
+                });
+            } catch { /* non-critical */ }
+        } else {
+            // Switching back to YouTube — pause Spotify and restore YouTube volume
+            this.spotifyPlayer.pause();
+            this.engine.getActiveDeck()?.setVolume(100);
+            this._currentSpotifyUri = null;
+            try {
+                await fetch('/auth/playback-preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preference: 'youtube' }),
+                });
+            } catch { /* non-critical */ }
+        }
+
+        this.playbackPref = pref;
+        localStorage.setItem('djwala_playback_pref', pref);
+        this._updatePrefUI();
+        this.showToast(`Playback: ${pref === 'spotify' ? 'Spotify' : 'YouTube'}`);
+    }
+
+    _updatePrefUI() {
+        const btns = document.querySelectorAll('.pref-btn');
+        btns.forEach(btn => {
+            const isActive = btn.dataset.pref === this.playbackPref;
+            btn.classList.toggle('active', isActive);
+            const indicator = btn.querySelector('.pref-indicator');
+            if (indicator) indicator.style.color = isActive ? '#1DB954' : '#666';
+        });
+    }
+
+    /**
+     * Resolve a track title to a Spotify URI via the backend search endpoint.
+     * Caches results to avoid repeated lookups for the same track.
+     */
+    async _resolveSpotifyUri(trackTitle) {
+        if (this._spotifyUriCache[trackTitle]) {
+            return this._spotifyUriCache[trackTitle];
+        }
+        try {
+            const resp = await fetch(`/api/spotify-search?q=${encodeURIComponent(trackTitle)}`);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (data.uri) {
+                this._spotifyUriCache[trackTitle] = data.uri;
+                return data.uri;
+            }
+        } catch {
+            // Fall through to null
+        }
+        return null;
     }
 
     // --- Playlists ---

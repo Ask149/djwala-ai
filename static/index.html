@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
-    <link rel="stylesheet" href="/static/css/style.css?v=22">
+    <link rel="stylesheet" href="/static/css/style.css?v=23">
 </head>
 <body>
     <div class="container">
@@ -65,6 +65,16 @@
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-section" id="linkAccounts"></div>
                     <div class="dropdown-divider"></div>
+                    <div class="dropdown-section" id="playbackPref" style="display:none">
+                        <div class="dropdown-label">Playback</div>
+                        <button class="dropdown-item pref-btn" data-pref="youtube" onclick="app.setPlaybackPref('youtube')">
+                            <span class="pref-indicator">●</span> YouTube
+                        </button>
+                        <button class="dropdown-item pref-btn" data-pref="spotify" onclick="app.setPlaybackPref('spotify')">
+                            <span class="pref-indicator">●</span> Spotify
+                        </button>
+                    </div>
+                    <div class="dropdown-divider" id="playbackPrefDivider" style="display:none"></div>
                     <button class="dropdown-item logout-btn" onclick="app.logout()">Sign Out</button>
                 </div>
             </div>
@@ -196,8 +206,8 @@
 
     <div class="players-container"></div>
 
-    <script src="/static/js/mix-engine.js?v=22"></script>
-    <script src="/static/js/app.js?v=22"></script>
+    <script src="/static/js/mix-engine.js?v=23"></script>
+    <script src="/static/js/app.js?v=23"></script>
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-modal">
             <div class="settings-header">

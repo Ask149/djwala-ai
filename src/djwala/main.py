@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from djwala.auth import router as auth_router, init_auth, get_current_user
-from djwala.providers import fetch_youtube_playlists, fetch_spotify_playlists
+from djwala.providers import fetch_youtube_playlists, fetch_spotify_playlists, search_spotify_track, refresh_spotify_token
 from djwala.config import Settings
 from djwala.db import UserDB
 from djwala.session import SessionManager
@@ -152,6 +153,40 @@ async def get_playlists(request: Request):
             errors.append("Spotify playlists unavailable")
     
     return {"playlists": playlists, "errors": errors}
+
+
+@app.get("/api/spotify-search")
+async def spotify_search(request: Request, q: str = Query(default=None)):
+    """Search Spotify for a track. Returns Spotify URI for Web Playback SDK."""
+    if not q:
+        raise HTTPException(400, "Missing query parameter 'q'")
+    user = get_current_user(request)
+    if not user or not user.has_spotify or not user.spotify_access_token:
+        raise HTTPException(401, "Spotify not connected")
+
+    # Refresh token if expired (same pattern as auth.py spotify_player_token)
+    token = user.spotify_access_token
+    if user.spotify_token_expires_at and time.time() > user.spotify_token_expires_at - 60:
+        try:
+            new_token, new_expires = refresh_spotify_token(
+                user.spotify_refresh_token, settings
+            )
+            user_db.update_spotify_tokens(user.id, new_token, new_expires)
+            token = new_token
+        except Exception as e:
+            logger.warning("Spotify token refresh failed: %s", e)
+            raise HTTPException(502, "Spotify token refresh failed")
+
+    try:
+        result = search_spotify_track(q, token)
+        if not result:
+            raise HTTPException(404, "Track not found on Spotify")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Spotify search failed: %s", e)
+        raise HTTPException(502, "Spotify search failed")
 
 
 @app.get("/session/{session_id}/queue")

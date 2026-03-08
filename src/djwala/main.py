@@ -98,6 +98,16 @@ async def service_worker():
     raise HTTPException(404, "sw.js not found")
 
 
+@app.get("/privacy")
+async def privacy():
+    """Serve the privacy policy page (required for OAuth)."""
+    from fastapi.responses import FileResponse
+    privacy_page = STATIC_DIR / "privacy.html"
+    if privacy_page.is_file():
+        return FileResponse(privacy_page)
+    raise HTTPException(404, "Privacy policy not found")
+
+
 @app.post("/session")
 @limiter.limit(settings.rate_limit)
 async def create_session(request: Request, req: SessionCreate):

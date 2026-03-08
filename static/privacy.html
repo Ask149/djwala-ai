@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — DjwalaAI</title>
+    <meta name="theme-color" content="#121212">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #121212;
+            color: #e0e0e0;
+            line-height: 1.7;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        a { color: #1DB954; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        h1 {
+            font-size: 2rem;
+            color: #fff;
+            margin-bottom: 0.25rem;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+        h2 {
+            font-size: 1.25rem;
+            color: #fff;
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        p, li { margin-bottom: 0.75rem; }
+        ul { padding-left: 1.25rem; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">&larr; Back to DjwalaAI</a>
+
+        <h1>Privacy Policy</h1>
+        <p class="subtitle">Last updated: March 8, 2026</p>
+
+        <h2>What We Collect</h2>
+        <p>When you sign in with Google or Spotify, we receive:</p>
+        <ul>
+            <li><strong>Display name and email</strong> — to identify your account.</li>
+            <li><strong>Playlist metadata</strong> — playlist names and track lists you choose to import. We do not access playlists you don't select.</li>
+            <li><strong>OAuth tokens</strong> — stored server-side to access your playlists and (for Spotify Premium) enable playback. Tokens are never exposed to the browser.</li>
+        </ul>
+
+        <h2>How We Use It</h2>
+        <ul>
+            <li><strong>Playlist import:</strong> We read your selected playlist to build a DJ mix from those tracks.</li>
+            <li><strong>Audio analysis:</strong> For Spotify tracks, we use Spotify's Audio Features API to get BPM, key, and energy data for harmonic mixing.</li>
+            <li><strong>Playback:</strong> If you're a Spotify Premium subscriber, we can play audio through Spotify's Web Playback SDK. Otherwise, audio plays via YouTube.</li>
+        </ul>
+
+        <h2>What We Don't Do</h2>
+        <ul>
+            <li>We <strong>never sell or share</strong> your data with third parties.</li>
+            <li>We <strong>never modify</strong> your playlists, library, or account.</li>
+            <li>We <strong>never store</strong> your Google or Spotify passwords.</li>
+            <li>We do <strong>not use</strong> advertising trackers or analytics that identify you personally.</li>
+        </ul>
+
+        <h2>Cookies</h2>
+        <p>We use a single <strong>HTTP-only session cookie</strong> (<code>djwala_session</code>) to keep you logged in. It contains an opaque session ID — no personal data. It expires when you log out or after 30 days.</p>
+
+        <h2>Data Storage</h2>
+        <p>Your account data (name, email, OAuth tokens) is stored in a SQLite database on our server. Track analysis results are cached to avoid re-processing. No data is stored in the cloud beyond our application server.</p>
+
+        <h2>Deleting Your Data</h2>
+        <p>You can remove your connected accounts from the user menu at any time. To fully delete your account and all associated data, email <strong>djwalaai@gmail.com</strong> and we'll remove everything within 7 days.</p>
+
+        <h2>Using DjwalaAI Without Login</h2>
+        <p>Login is entirely optional. DjwalaAI works fully without an account — just type artist names and get a mix. No data is collected for anonymous users beyond standard server logs (IP address, request URL).</p>
+
+        <h2>Changes</h2>
+        <p>If we update this policy, we'll note the date above. Continued use after changes constitutes acceptance.</p>
+
+        <h2>Contact</h2>
+        <p>Questions? Email <a href="mailto:djwalaai@gmail.com">djwalaai@gmail.com</a>.</p>
+    </div>
+</body>
+</html>

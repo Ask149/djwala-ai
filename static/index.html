@@ -74,6 +74,7 @@
             <div class="mode-toggle">
                 <button class="mode-btn active" data-mode="artists">Artists</button>
                 <button class="mode-btn" data-mode="song">Song</button>
+                <button class="mode-btn mode-btn-playlist" data-mode="playlist" style="display:none">Playlist</button>
             </div>
             <div class="search-row">
                 <input type="text" class="search-input" placeholder="Artist names, comma separated... (e.g., &quot;Arijit Singh, Pritam, AP Dhillon&quot;)">
@@ -84,6 +85,13 @@
                 </button>
             </div>
             <div class="artist-chips"></div>
+            <div class="playlist-picker" id="playlistPicker" style="display:none">
+                <div class="playlist-picker-loading" id="playlistLoading" style="display:none">
+                    <div class="spinner" style="display:inline-block"></div>
+                    <span>Loading playlists...</span>
+                </div>
+                <div class="playlist-list" id="playlistList"></div>
+            </div>
         </div>
 
         <div class="mood-grid" id="moodGrid">

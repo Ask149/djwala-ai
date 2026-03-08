@@ -344,10 +344,22 @@ class DjwalaApp {
         this.els.modeBtns.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
+        const picker = document.getElementById('playlistPicker');
         if (mode === 'song') {
             this.els.searchInput.placeholder = 'Enter a song name... (e.g., "Tum Hi Ho", "Blinding Lights")';
+            this.els.searchInput.style.display = '';
+            this.els.goBtn.style.display = '';
+            if (picker) picker.style.display = 'none';
+        } else if (mode === 'playlist') {
+            this.els.searchInput.style.display = 'none';
+            this.els.goBtn.style.display = 'none';
+            if (picker) picker.style.display = 'block';
+            this.fetchPlaylists();
         } else {
             this.els.searchInput.placeholder = 'Artist names, comma separated... (e.g., "Arijit Singh, Pritam, AP Dhillon")';
+            this.els.searchInput.style.display = '';
+            this.els.goBtn.style.display = '';
+            if (picker) picker.style.display = 'none';
         }
     }
 
@@ -1541,6 +1553,10 @@ class DjwalaApp {
 
         document.getElementById('userName').textContent = user.display_name || user.email || 'User';
 
+        // Show Playlist mode button when logged in
+        const playlistBtn = document.querySelector('.mode-btn-playlist');
+        if (playlistBtn) playlistBtn.style.display = '';
+
         // Connected accounts
         const connected = document.getElementById('connectedAccounts');
         connected.innerHTML = '<div class="dropdown-label">Connected</div>';
@@ -1600,7 +1616,100 @@ class DjwalaApp {
         } catch { /* ignore */ }
         this.authUser = null;
         document.getElementById('userDropdown').style.display = 'none';
+        // Hide playlist mode button
+        const playlistBtn = document.querySelector('.mode-btn-playlist');
+        if (playlistBtn) playlistBtn.style.display = 'none';
+        // If in playlist mode, switch back to artists
+        if (this.mode === 'playlist') this.setMode('artists');
         this.showLoggedOut(this.authStatus || {});
+    }
+
+    // --- Playlists ---
+
+    async fetchPlaylists() {
+        const loading = document.getElementById('playlistLoading');
+        const list = document.getElementById('playlistList');
+        loading.style.display = 'flex';
+        list.innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/playlists');
+            if (!resp.ok) throw new Error('Failed to fetch playlists');
+            const data = await resp.json();
+            loading.style.display = 'none';
+
+            if (!data.playlists || data.playlists.length === 0) {
+                list.innerHTML = '<div class="playlist-empty">No playlists found. Create some on YouTube or Spotify first.</div>';
+                return;
+            }
+
+            data.playlists.forEach(pl => {
+                const item = document.createElement('button');
+                item.className = 'playlist-item';
+                const icon = pl.source === 'spotify' ? '🎧' : '🎵';
+                const count = pl.track_count ? ` · ${pl.track_count} tracks` : '';
+                item.innerHTML = `
+                    <span class="playlist-icon">${icon}</span>
+                    <span class="playlist-name">${this._escapeHtml(pl.name)}</span>
+                    <span class="playlist-meta">${pl.source}${count}</span>
+                `;
+                item.addEventListener('click', () => this.startPlaylistSession(pl.id, pl.source, pl.name));
+                list.appendChild(item);
+            });
+        } catch (err) {
+            loading.style.display = 'none';
+            list.innerHTML = '<div class="playlist-empty">Could not load playlists. Try logging in again.</div>';
+            console.warn('Playlist fetch error:', err);
+        }
+    }
+
+    async startPlaylistSession(playlistId, source, name) {
+        this.clearSavedSession();
+        this.showArtistChips([name]);
+        this.els.goBtn.disabled = true;
+        this.setStatus('Building mix from playlist...', true);
+
+        const hiw = document.getElementById('howItWorks');
+        if (hiw) hiw.classList.add('hidden');
+        this.els.moodGrid.classList.add('hidden');
+        this.els.hero.classList.add('collapsed');
+        this.els.loadingSkeleton.classList.add('active');
+
+        // Hide playlist picker during session creation
+        const picker = document.getElementById('playlistPicker');
+        if (picker) picker.style.display = 'none';
+
+        this.trackEvent('mix_start', { mode: 'playlist', query: name, source });
+
+        try {
+            const body = {
+                mode: 'playlist',
+                query: name,
+                playlist_id: playlistId,
+                playlist_source: source,
+            };
+            if (this.apiKey) body.youtube_api_key = this.apiKey;
+            body.mix_length = this.mixLength;
+
+            const resp = await fetch('/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json();
+            this.sessionId = data.session_id;
+            this.saveSession();
+            this.pollQueue();
+        } catch (err) {
+            this.setStatus('Error: ' + err.message);
+            this.els.goBtn.disabled = false;
+        }
+    }
+
+    _escapeHtml(text) {
+        const el = document.createElement('span');
+        el.textContent = text;
+        return el.innerHTML;
     }
 
     // --- Keyboard Shortcuts ---

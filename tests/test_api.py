@@ -402,3 +402,17 @@ async def test_thumb_proxy_missing_param(client):
     """Thumbnail proxy requires 'v' query param."""
     resp = await client.get("/api/thumb")
     assert resp.status_code == 400
+
+
+async def test_playlists_unauthenticated(client):
+    """GET /api/playlists without login returns 401."""
+    resp = await client.get("/api/playlists")
+    assert resp.status_code == 401
+
+
+async def test_auth_status_endpoint(client):
+    """GET /auth/status returns OAuth config."""
+    resp = await client.get("/auth/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "oauth_enabled" in data

@@ -16,7 +16,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from djwala.auth import router as auth_router, init_auth
+from djwala.auth import router as auth_router, init_auth, get_current_user
+from djwala.providers import fetch_youtube_playlists, fetch_spotify_playlists
 from djwala.config import Settings
 from djwala.db import UserDB
 from djwala.session import SessionManager
@@ -107,9 +108,13 @@ async def create_session(request: Request, req: SessionCreate):
 
     session = manager.create_session(mode, req.query, youtube_api_key=req.youtube_api_key, mix_length=req.mix_length,
                                      playlist_id=req.playlist_id, playlist_source=req.playlist_source)
+    # For playlist mode, pass user's tokens to build_queue
+    user = get_current_user(request)
+    spotify_token = user.spotify_access_token if user and user.has_spotify else None
+    google_token = user.google_access_token if user and user.has_google else None
     # Start building queue in background
     task = asyncio.create_task(
-        manager.build_queue(session.session_id),
+        manager.build_queue(session.session_id, spotify_token=spotify_token, google_token=google_token),
         name=f"build_queue:{session.session_id}",
     )
     task.add_done_callback(_log_task_exception)
@@ -118,6 +123,35 @@ async def create_session(request: Request, req: SessionCreate):
         "session_id": session.session_id,
         "status": session.status.value,
     }
+
+
+@app.get("/api/playlists")
+async def get_playlists(request: Request):
+    """Return user's playlists from connected providers."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401, "Login required")
+    
+    playlists = []
+    errors = []
+    
+    if user.has_google and user.google_access_token:
+        try:
+            yt_playlists = fetch_youtube_playlists(user.google_access_token)
+            playlists.extend(yt_playlists)
+        except Exception as e:
+            logger.warning("Failed to fetch YouTube playlists: %s", e)
+            errors.append("YouTube playlists unavailable")
+    
+    if user.has_spotify and user.spotify_access_token:
+        try:
+            sp_playlists = fetch_spotify_playlists(user.spotify_access_token)
+            playlists.extend(sp_playlists)
+        except Exception as e:
+            logger.warning("Failed to fetch Spotify playlists: %s", e)
+            errors.append("Spotify playlists unavailable")
+    
+    return {"playlists": playlists, "errors": errors}
 
 
 @app.get("/session/{session_id}/queue")

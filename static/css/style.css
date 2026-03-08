@@ -69,6 +69,187 @@ h1 {
     line-height: 1.5;
 }
 
+/* Auth Section */
+.auth-section {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.auth-logged-out {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.btn-oauth {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.5rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 280px;
+    max-width: 100%;
+}
+
+.oauth-icon {
+    flex-shrink: 0;
+}
+
+.btn-youtube {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.btn-youtube:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.btn-spotify {
+    background: #1DB954;
+    border: 1px solid #1DB954;
+    color: #fff;
+}
+
+.btn-spotify:hover {
+    background: #1ed760;
+    border-color: #1ed760;
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 280px;
+    max-width: 100%;
+    margin-top: 0.25rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.auth-divider span {
+    color: #666;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* Logged-in state */
+.auth-logged-in {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #181818;
+    border: 1px solid #282828;
+    border-radius: 999px;
+    padding: 0.4rem 0.75rem;
+}
+
+.user-name {
+    font-size: 0.85rem;
+    color: #e0e0e0;
+}
+
+.user-menu-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+}
+
+.user-menu-btn:hover { color: #fff; }
+
+.user-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 50%;
+    transform: translateX(50%);
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 10px;
+    min-width: 200px;
+    padding: 0.5rem 0;
+    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-label {
+    font-size: 0.7rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 1rem 0.25rem;
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    color: #ccc;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+}
+
+.dropdown-item:hover { background: rgba(255, 255, 255, 0.06); }
+
+.dropdown-item.connected {
+    color: #1DB954;
+    cursor: default;
+}
+
+.dropdown-item.link-btn {
+    color: #999;
+}
+
+.dropdown-item.link-btn:hover { color: #1DB954; }
+
+.dropdown-item.logout-btn {
+    color: #e06060;
+}
+
+.dropdown-item.logout-btn:hover {
+    background: rgba(224, 96, 96, 0.1);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: #333;
+    margin: 0.25rem 0;
+}
+
+@media (max-width: 480px) {
+    .btn-oauth { width: 100%; }
+    .auth-divider { width: 100%; }
+}
+
 /* Input Section */
 .input-section {
     background: #181818;

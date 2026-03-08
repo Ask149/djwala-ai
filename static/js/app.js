@@ -293,10 +293,14 @@ class DjwalaApp {
         this.partyWaveformR = new WaveformRenderer(document.getElementById('partyWaveformRight'));
         this.apiKey = localStorage.getItem('djwala_youtube_api_key') || null;
         this.mixLength = parseInt(localStorage.getItem('djwala_mix_length') || '50', 10);
+        // Auth state
+        this.authUser = null;
+        this.authStatus = null;
         this.bindEvents();
         this.engine.init();
         this.initKeyboardShortcuts();
         this.updateKeyStatus();
+        this.checkAuth();
         this.initRestore();
         this.trackEvent('page_view', { referrer: document.referrer || null });
     }
@@ -1498,6 +1502,105 @@ class DjwalaApp {
             const line = this.lyricsData[activeIndex];
             this.els.partyLyrics.textContent = line.text || '♪';
         }
+    }
+
+    // --- Auth ---
+
+    async checkAuth() {
+        try {
+            const resp = await fetch('/auth/status');
+            if (!resp.ok) return;
+            const status = await resp.json();
+            this.authStatus = status;
+
+            if (!status.oauth_enabled) return; // OAuth not configured, hide buttons
+
+            document.getElementById('auth-section').style.display = 'block';
+
+            const meResp = await fetch('/auth/me');
+            if (!meResp.ok) {
+                this.showLoggedOut(status);
+                return;
+            }
+            const me = await meResp.json();
+            if (me.logged_in) {
+                this.authUser = me.user;
+                this.showLoggedIn(me.user);
+            } else {
+                this.showLoggedOut(status);
+            }
+        } catch (e) {
+            console.warn('Auth check failed:', e);
+        }
+    }
+
+    showLoggedIn(user) {
+        document.getElementById('auth-logged-out').style.display = 'none';
+        const loggedIn = document.getElementById('auth-logged-in');
+        loggedIn.style.display = 'flex';
+
+        document.getElementById('userName').textContent = user.display_name || user.email || 'User';
+
+        // Connected accounts
+        const connected = document.getElementById('connectedAccounts');
+        connected.innerHTML = '<div class="dropdown-label">Connected</div>';
+        if (user.google_linked) {
+            connected.innerHTML += '<div class="dropdown-item connected">✓ YouTube</div>';
+        }
+        if (user.spotify_linked) {
+            connected.innerHTML += '<div class="dropdown-item connected">✓ Spotify</div>';
+        }
+
+        // Link accounts
+        const link = document.getElementById('linkAccounts');
+        link.innerHTML = '';
+        if (!user.google_linked) {
+            link.innerHTML += '<a class="dropdown-item link-btn" href="/auth/google/login?link=1">Link YouTube</a>';
+        }
+        if (!user.spotify_linked) {
+            link.innerHTML += '<a class="dropdown-item link-btn" href="/auth/spotify/login?link=1">Link Spotify</a>';
+        }
+        if (link.innerHTML === '') {
+            link.previousElementSibling.style.display = 'none'; // hide divider
+        }
+    }
+
+    showLoggedOut(status) {
+        const loggedOut = document.getElementById('auth-logged-out');
+        loggedOut.style.display = 'flex';
+        document.getElementById('auth-logged-in').style.display = 'none';
+
+        // Hide buttons for disabled providers
+        const ytBtn = loggedOut.querySelector('.btn-youtube');
+        const spBtn = loggedOut.querySelector('.btn-spotify');
+        if (ytBtn) ytBtn.style.display = status.google_enabled ? '' : 'none';
+        if (spBtn) spBtn.style.display = status.spotify_enabled ? '' : 'none';
+    }
+
+    toggleUserMenu() {
+        const dropdown = document.getElementById('userDropdown');
+        const isOpen = dropdown.style.display !== 'none';
+        dropdown.style.display = isOpen ? 'none' : 'block';
+
+        if (!isOpen) {
+            // Close on click outside
+            const closeHandler = (e) => {
+                if (!dropdown.contains(e.target) && e.target.id !== 'userMenuBtn') {
+                    dropdown.style.display = 'none';
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeHandler), 0);
+        }
+    }
+
+    async logout() {
+        try {
+            await fetch('/auth/logout', { method: 'POST' });
+        } catch { /* ignore */ }
+        this.authUser = null;
+        document.getElementById('userDropdown').style.display = 'none';
+        this.showLoggedOut(this.authStatus || {});
     }
 
     // --- Keyboard Shortcuts ---

@@ -16,7 +16,9 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from djwala.auth import router as auth_router, init_auth
 from djwala.config import Settings
+from djwala.db import UserDB
 from djwala.session import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,10 @@ manager = SessionManager(
     database_path=settings.database_path,
     youtube_api_key=settings.youtube_api_key,
 )
+
+user_db = UserDB(db_path=settings.database_path)
+init_auth(settings, user_db)
+app.include_router(auth_router)
 
 
 def _log_task_exception(task: asyncio.Task) -> None:

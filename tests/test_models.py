@@ -34,3 +34,11 @@ def test_spotify_key_to_camelot():
     assert spotify_key_to_camelot(9, 0) == "8A"   # A minor
     assert spotify_key_to_camelot(7, 1) == "9B"   # G major
     assert spotify_key_to_camelot(-1, 0) == "8A"  # unknown → default
+
+def test_spotify_key_to_camelot_enharmonic():
+    """Sharps from Spotify must map correctly via enharmonic equivalents."""
+    assert spotify_key_to_camelot(1, 1) == "3B"   # C#/Db major
+    assert spotify_key_to_camelot(3, 1) == "5B"   # D#/Eb major
+    assert spotify_key_to_camelot(8, 1) == "4B"   # G#/Ab major
+    assert spotify_key_to_camelot(10, 0) == "3A"  # A#/Bb minor
+    assert spotify_key_to_camelot(10, 1) == "6B"  # A#/Bb major

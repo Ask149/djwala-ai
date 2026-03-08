@@ -49,7 +49,11 @@ class MixCommand:
 
 # ── Spotify key helpers ──────────────────────────────────────────────
 
+# Intentionally duplicated from analyzer.KEY_NAMES to avoid importing heavy audio deps
 KEY_NAMES_SPOTIFY = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+# CAMELOT_WHEEL uses flats (Db, Eb, Ab, Bb) but Spotify uses sharps — map between them
+_ENHARMONIC = {"C#": "Db", "D#": "Eb", "G#": "Ab", "A#": "Bb"}
 
 
 def spotify_key_to_name(key: int, mode: int) -> str:
@@ -67,7 +71,12 @@ def spotify_key_to_camelot(key: int, mode: int) -> str:
         return "8A" if mode == 0 else "8B"
     name = KEY_NAMES_SPOTIFY[key]
     mode_str = "minor" if mode == 0 else "major"
-    return CAMELOT_WHEEL.get((name, mode_str), "8A")
+    result = CAMELOT_WHEEL.get((name, mode_str))
+    if result is None:
+        alt = _ENHARMONIC.get(name)
+        if alt:
+            result = CAMELOT_WHEEL.get((alt, mode_str))
+    return result or "8A"
 
 
 # ── Auth models ──────────────────────────────────────────────────────

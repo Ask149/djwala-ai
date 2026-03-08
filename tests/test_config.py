@@ -29,3 +29,30 @@ def test_config_env_override(monkeypatch):
     assert settings.cors_origins == ["http://localhost:3000"]
     assert settings.rate_limit == "10/minute"
     assert settings.database_path == "custom.db"
+
+
+def test_oauth_disabled_by_default():
+    """OAuth is disabled when no client IDs configured."""
+    s = Settings()
+    assert not s.oauth_enabled
+
+
+def test_oauth_enabled_with_google():
+    """OAuth enabled when Google credentials present."""
+    s = Settings(google_client_id="id", google_client_secret="secret")
+    assert s.oauth_enabled
+    assert s.google_enabled
+    assert not s.spotify_enabled
+
+
+def test_oauth_enabled_with_spotify():
+    """OAuth enabled when Spotify credentials present."""
+    s = Settings(spotify_client_id="id", spotify_client_secret="secret")
+    assert s.oauth_enabled
+    assert not s.google_enabled
+    assert s.spotify_enabled
+
+
+def test_session_secret_default_none():
+    s = Settings()
+    assert s.session_secret is None

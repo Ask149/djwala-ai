@@ -12,7 +12,7 @@ import urllib.parse
 
 import requests as http_requests
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from djwala.config import Settings
 from djwala.db import UserDB
@@ -126,13 +126,19 @@ async def auth_me(request: Request):
 
 # --- Logout ---
 
-@router.get("/logout")
+@router.api_route("/logout", methods=["GET", "POST"])
 async def logout(request: Request):
     session_id = request.cookies.get("djwala_session")
     if session_id and _db:
         _db.delete_session(session_id)
-    response = RedirectResponse("/", status_code=302)
-    response.delete_cookie("djwala_session", path="/")
+    # POST returns JSON; GET redirects (for browser link clicks)
+    if request.method == "POST":
+        response = JSONResponse({"ok": True})
+    else:
+        response = RedirectResponse("/", status_code=302)
+    response.delete_cookie(
+        "djwala_session", path="/", secure=True, samesite="lax", httponly=True
+    )
     return response
 
 
